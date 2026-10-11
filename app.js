@@ -217,6 +217,11 @@
     else if (text.startsWith("<?xml") || text.startsWith("<")) detected = "XML-like text";
     else if (text.startsWith("{") || text.startsWith("[")) detected = "JSON-like text";
     else if (text.startsWith("SQLite format 3")) detected = "SQLite / GeoPackage container";
+    else if (text.startsWith("%PDF-")) detected = "PDF document";
+    else if (text.startsWith("LASF")) detected = "LAS point cloud";
+    else if (text.startsWith("LAZ")) detected = "LAZ point cloud";
+    else if (text.startsWith("ASTM-E57")) detected = "E57 point cloud";
+    else if (text.startsWith("<!DOCTYPE html") || text.startsWith("<html")) detected = "HTML document";
     else if (text.startsWith("ARROW1")) detected = "Arrow IPC file";
     else if (bytes.length >= 4 && bytes[0] === 0 && bytes[1] === 0 && bytes[2] === 0 && bytes[3] === 0x01) detected = "Possible Shapefile geometry header";
     else if (text.startsWith("ISO-10303-21")) detected = "STEP CAD exchange file";
@@ -235,11 +240,11 @@
       }
       has(prefixOk, "FITS primary header starts with SIMPLE.", "FITS primary-header signature SIMPLE was not found at byte 0.");
       has(endCardAt >= 0, "An END card was found at an 80-byte card boundary in the inspected header window.", "No END card found in the first 64 KiB; header may be longer, malformed or not FITS.");
-      has(true, "FITS filename noted; the compressed/uncompressed variant needs format-aware parsing.", "File variant unknown.");
-      // Do not fail total-size checks for truncated sampling; whole size should be a multiple of 2880 in a completed standard FITS file.
-      has(true, "Header check only: HDU/data padding and complete file length require full FITSverify.", "Full-file validation not performed.");
-    } else if (ext === ".h5" || ext === ".hdf5" || ext === ".hdf") {
-      has(detected === "HDF5 signature" || ext === ".hdf", "HDF5 magic detected, or HDF4 needs separate parser checks.", "HDF signature not recognized in inspected prefix.");
+      checks.push({ok:false, text:"Header-only inspection: HDU/data padding, checksums and whole-file length still require FITSverify."});
+    } else if (ext === ".h5" || ext === ".hdf5") {
+      has(detected === "HDF5 signature", "HDF5 magic detected; group/dataset structure not checked.", "HDF5 signature not detected in the expected header location.");
+    } else if (ext === ".hdf" || ext === ".h4") {
+      has(false, "HDF4 requires an HDF4-aware reader; this inspector does not identify the HDF4 signature reliably.", "HDF4 signature not checked.");
     } else if (ext === ".nc" || ext === ".nc4") {
       const ncMagic = starts(bytes,[0x43,0x44,0x46,0x01]) || starts(bytes,[0x43,0x44,0x46,0x02]) || detected === "HDF5 signature";
       has(ncMagic, "NetCDF classic or HDF5-based NetCDF-4 signature clue detected.", "No recognized NetCDF classic/HDF5 signature; use a NetCDF-aware reader.");
@@ -259,13 +264,21 @@
       has(detected === "JSON-like text" || ext === ".ndjson" || ext === ".jsonl", "JSON-like content detected; full syntax and schema checks follow where practical.", "JSON signature clue not recognized.");
     } else if (ext === ".bsp" || ext === ".bc" || ext === ".bpc" || ext === ".dsk" || ext === ".ek" || ext === ".tf" || ext === ".ti" || ext === ".tls" || ext === ".tm" || ext === ".tsc") {
       has(detected.includes("SPICE"), "SPICE identifier clue detected; use NAIF toolkit for semantic checks.", "SPICE marker is not visible in the inspected prefix; binary kernels may need a SPICE-aware inspector.");
-    } else if (ext === ".gpkg") {
-      has(detected === "SQLite / GeoPackage container", "SQLite header detected; required GeoPackage metadata tables not checked.", "SQLite container header not detected.");
+    } else if ([".gpkg", ".sqlite", ".sqlite3", ".db"].includes(ext)) {
+      const sqlite = detected === "SQLite / GeoPackage container";
+      has(sqlite, "SQLite header detected; database integrity/schema not checked.", "SQLite header not detected.");
+      if (ext === ".gpkg") checks.push({ok:false,text:"GeoPackage conformance also requires checking required metadata tables, contents and spatial reference records."});
     } else if (ext === ".arrow" || ext === ".feather") {
       has(detected === "Arrow IPC file", "Arrow IPC signature detected; file footer/schema not checked.", "Arrow IPC signature not detected.");
     } else if (ext === ".step" || ext === ".stp") {
       has(detected === "STEP CAD exchange file", "STEP header detected; geometry and full record structure not validated.", "STEP header not detected.");
-    } else if ([".csv",".tsv",".txt",".dat",".tab",".ict",".yaml",".yml",".md"].includes(ext)) {
+    } else if (ext === ".pdf") {
+      has(detected === "PDF document", "PDF signature detected; document structure and embedded payloads not validated.", "PDF signature not detected.");
+    } else if (ext === ".las" || ext === ".laz") {
+      has(detected === "LAS point cloud" || detected === "LAZ point cloud", "LAS/LAZ magic detected; point format, bounds and coordinate metadata not parsed.", "LAS/LAZ signature not recognized; use PDAL or a format-aware reader.");
+    } else if (ext === ".e57") {
+      has(detected === "E57 point cloud", "E57 signature detected; offsets and compressed sections not checked.", "E57 signature not detected.");
+    } else if ([".html",".htm",".log",".md",".csv",".tsv",".txt",".dat",".tab",".ict",".yaml",".yml"].includes(ext)) {
       has(bytes.length > 0, "Non-empty data/text file. Encoding, delimiter, row count and scientific schema are not certified.", "File appears empty.");
     } else {
       checks.push({ok: true, text: "No dedicated browser parser is configured for this format. Use the official tool in the format registry."});

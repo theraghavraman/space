@@ -42,6 +42,7 @@
       s.src = url;
       if (module) s.type = "module";
       s.async = true;
+      if (LIB_SRI[url]) { s.integrity = LIB_SRI[url]; s.crossOrigin = "anonymous"; }
       s.onload = () => {
         if (!test || test()) resolve();
         else if (module) resolve();
@@ -60,6 +61,15 @@
     fflate: "https://cdn.jsdelivr.net/npm/fflate@0.8.2/umd/index.js",
     geotiff: "https://cdn.jsdelivr.net/npm/geotiff@2.1.3/dist-browser/geotiff.js",
     modelViewer: "https://ajax.googleapis.com/ajax/libs/model-viewer/4.0.0/model-viewer.min.js"
+  };
+  const LIB_SRI = {
+    [LIB.papa]:"sha384-Jd2/X5FXVKahwaY2nivvw4LfSTg9idSj8yNXWtT4qef0fHSYr6M7M8bJAfbFYoMc",
+    [LIB.sheet]:"sha384-EnyY0/GSHQGSxSgMwaIPzSESbqoOLSexfnSMN2AP+39Ckmn92stwABZynq1JyzdT",
+    [LIB.pdf]:"sha384-/1qUCSGwTur9vjf/z9lmu/eCUYbpOTgSjmpbMQZ1/CtX2v/WcAIKqRv+U1DUCG6e",
+    [LIB.yaml]:"sha384-+pxiN6T7yvpryuJmE1gM9PX7yQit15auDb+ZwwvJOd/4be2Cie5/IuVXgQb/S9du",
+    [LIB.fflate]:"sha384-DT0Ls0mO7JmjTnT+oBuMhEJzYJO1zUqzuuMXNdnOmOQRIpN2BgSjvBV/j50NngIT",
+    [LIB.geotiff]:"sha384-m5adk5PRgt3JjiYbYoG8oXxc3EgRFKc1aCBgKzyxqxnbYpdiAMlHkR0gVDp03Q/H",
+    [LIB.modelViewer]:"sha384-sr9b4Ux0WhAUGclJ0ym0FSY2zSOMmNSn0bP/SA0e6bNCrpn/5W3QL8mm+LdlQMKw"
   };
   function clearStage() {
     if (activeUrl) URL.revokeObjectURL(activeUrl);

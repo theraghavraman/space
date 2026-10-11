@@ -14,6 +14,7 @@
   const MAX_TEXT_BYTES = 32 * 1024 * 1024;
   const MAX_CONVERT_BYTES = 100 * 1024 * 1024;
   const MAX_TABLE_ROWS = 250;
+  const MAX_NDJSON_ROWS = 100000;
   const libs = {};
   let activeFile = null, currentPreview = {}, activeUrl = "", activeArchive = null, activeGzipBytes = null, activeViewerCleanup = null, activeFormatRecord = null;
   let formatRegistryPromise = null;
@@ -204,7 +205,7 @@
     if (kind === "image") return [{value:"png",label:"Image → PNG"}, {value:"jpeg",label:"Image → JPEG"}, {value:"webp",label:"Image → WebP"}].concat(common);
     if (kind === "tiff" || kind === "fits") return [{value:"png",label:"Rendered preview → PNG"}, {value:"jpeg",label:"Rendered preview → JPEG"}].concat(common);
     if (kind === "pdf") return [{value:"pdf-png",label:"Current PDF page → PNG"}, {value:"pdf-jpeg",label:"Current PDF page → JPEG"}, {value:"pdf-text",label:"Extract PDF text → TXT"}].concat(common);
-    if (kind === "table" || ext===".csv" || ext===".tsv" || ext===".tab") return [{value:"csv",label:"Export as CSV"}, {value:"tsv",label:"Export as TSV"}, {value:"json",label:"Table → JSON"}, {value:"xlsx",label:"Table → XLSX workbook"}].concat(common);
+    if (kind === "table" || kind === "jsonl" || ext===".csv" || ext===".tsv" || ext===".tab" || ext===".jsonl" || ext===".ndjson") return [{value:"csv",label:"Export records → CSV"}, {value:"tsv",label:"Export records → TSV"}, {value:"json",label:"Records → JSON array"}, {value:"xlsx",label:"Records → XLSX workbook"}].concat(common);
     if (kind === "json") return [{value:"json-pretty",label:"Pretty-print JSON"}, {value:"json-min",label:"Minify JSON"}, {value:"csv",label:"JSON records → CSV"}, {value:"tsv",label:"JSON records → TSV"}, {value:"xlsx",label:"JSON records → XLSX"}, {value:"yaml",label:"JSON → YAML"}, {value:"xml",label:"JSON → XML"}].concat(common);
     if (kind === "yaml") return [{value:"json",label:"YAML → JSON"}, {value:"yaml",label:"Normalize YAML"}].concat(common);
     if (kind === "xml") return [{value:"json",label:"XML → JSON (simple documents)"}, {value:"xml",label:"Normalize XML"}].concat(common);
@@ -303,6 +304,36 @@
       },error:reject});
     });
   }
+  async function parseJsonLinesFile(file, maxRows=MAX_NDJSON_ROWS) {
+    if(file.size>MAX_CONVERT_BYTES)throw new Error("JSON Lines preview/conversion is limited to 100 MB in the browser.");
+    const text=await file.text();
+    const lines=text.split(/\r?\n/);
+    const rows=[],errors=[];
+    let total=0;
+    for(let i=0;i<lines.length;i++){
+      const line=lines[i].trim();if(!line)continue;
+      total++;
+      if(rows.length>=maxRows)continue;
+      try {
+        const value=JSON.parse(line);
+        if(value && typeof value==="object" && !Array.isArray(value))rows.push(value);
+        else rows.push({value:value});
+      } catch(err) {if(errors.length<20)errors.push("Line "+(i+1)+": "+err.message);}
+    }
+    const fields=Array.from(new Set(rows.flatMap((row)=>Object.keys(row))));
+    return {rows:rows,fields:fields,totalRows:total,truncated:total>maxRows,errors:errors};
+  }
+  async function renderJsonLines(file) {
+    addHeading("JSON Lines / NDJSON viewer","Each non-empty line is parsed as a separate JSON record. Preview is capped at 250 records; exports are capped at 100,000 records / 100 MB.");
+    const parsed=await parseJsonLinesFile(file,MAX_TABLE_ROWS);
+    metaStrip([["RECORDS",parsed.totalRows.toLocaleString()],["COLUMNS",String(parsed.fields.length)],["PREVIEW",String(parsed.rows.length)]]);
+    if(parsed.rows.length)addTable(parsed.rows.map((row)=>parsed.fields.map((field)=>row[field])),parsed.fields,"First "+parsed.rows.length+" record(s). JSON lines are parsed independently.");
+    else addNotice("No valid JSON records were found.","warn");
+    if(parsed.errors.length)addNotice(parsed.errors.join("\n"),"warn");
+    if(parsed.truncated)addNotice("The preview omits records after row "+MAX_TABLE_ROWS+". Conversion reads up to "+MAX_NDJSON_ROWS+" records.","warn");
+    currentPreview={type:"jsonl",rows:parsed.rows,headers:parsed.fields,text:JSON.stringify(parsed.rows,null,2)};
+    $("#viewerCopy").disabled=!parsed.rows.length;
+  }
   async function renderJson(file) {
     const text=await file.slice(0,MAX_TEXT_BYTES).text();
     let parsed;
@@ -398,7 +429,7 @@
     $("#viewerCopy").disabled=true;
   }
   async function isHDF5File(file) {
-    const bytes=await readHead(file,4096);
+    const bytes=await readHead(file,Math.min(file.size,65536));
     const sig=[0x89,0x48,0x44,0x46,0x0d,0x0a,0x1a,0x0a];
     for(let offset=0;offset+8<=bytes.length;offset=(offset===0?512:offset*2)){
       let ok=true;for(let i=0;i<8;i++)if(bytes[offset+i]!==sig[i]){ok=false;break;}
@@ -914,6 +945,8 @@
         kind="workbook";setTargets(targetsFor(file,kind));await renderWorkbook(file);
       } else if(ext===".geojson") {
         kind="geojson";setTargets(targetsFor(file,kind));await renderGeoJSON(file);
+      } else if([".jsonl",".ndjson"].includes(ext)) {
+        kind="jsonl";setTargets(targetsFor(file,kind));await renderJsonLines(file);
       } else if(ext===".json") {
         kind="json";setTargets(targetsFor(file,kind));await renderJson(file);
       } else if([".yaml",".yml"].includes(ext)) {
@@ -980,6 +1013,12 @@
   async function parseFileValue(file) {
     const ext=extOf(file);
     if(file.size>MAX_CONVERT_BYTES) throw new Error("Conversion exceeds the 100 MB browser safety limit.");
+    if([".jsonl",".ndjson"].includes(ext)) {
+      const parsed=await parseJsonLinesFile(file,MAX_NDJSON_ROWS);
+      if(parsed.errors.length)throw new Error("JSON Lines contains malformed records; fix errors before conversion. First error: "+parsed.errors[0]);
+      if(parsed.truncated)throw new Error("JSON Lines export exceeds the "+MAX_NDJSON_ROWS+"-record browser limit. Use a streaming CLI tool instead of silently exporting a partial dataset.");
+      return parsed;
+    }
     if([".json",".geojson"].includes(ext)) return JSON.parse(await file.text());
     if([".yaml",".yml"].includes(ext)) {
       await loadScript(LIB.yaml,()=>!!window.jsyaml);

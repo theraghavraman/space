@@ -815,7 +815,218 @@
     });
     return {hdu:candidate.index,name:candidate.extname||("HDU "+candidate.index),rows:normalized,fields:fields,totalRows:Number(table.rows)||0};
   }
+  const FITS_RANGE_CHUNK_BYTES = 10 * 2880;
+  const FITS_MAX_HEADER_BYTES = 16 * 1024 * 1024;
+  const FITS_MAX_PREVIEW_READ_BYTES = 48 * 1024 * 1024;
+  const FITS_MAX_SAMPLE_ROWS = 192;
+  const FITS_MAX_DISPLAY_DIMENSION = 1200;
+  function parseFitsHeaderValue(card) {
+    let raw=card.slice(10),quoted=false,cut=raw.length;
+    for(let i=0;i<raw.length;i++) {
+      if(raw[i]==="'") {
+        if(quoted && raw[i+1]==="'"){i++;continue;}
+        quoted=!quoted;
+      } else if(raw[i]==="/" && !quoted){cut=i;break;}
+    }
+    raw=raw.slice(0,cut).trim();
+    if(raw.startsWith("'")) {
+      let value=raw.slice(1);
+      if(value.endsWith("'"))value=value.slice(0,-1);
+      return value.replace(/''/g,"'").trim();
+    }
+    if(raw==="T")return true;
+    if(raw==="F")return false;
+    if(raw==="")return "";
+    const num=Number(raw.replace(/[dD]/,"E"));
+    return Number.isFinite(num)?num:raw;
+  }
+  async function readFitsPrimaryHeader(file) {
+    const chunks=[];
+    let total=0,complete=false,headerEnd=-1,headerCards=[],headers={};
+    while(total<Math.min(file.size,FITS_MAX_HEADER_BYTES)) {
+      const end=Math.min(file.size,total+FITS_RANGE_CHUNK_BYTES);
+      if(end<=total)break;
+      const bytes=new Uint8Array(await file.slice(total,end).arrayBuffer());
+      if(!bytes.length)break;
+      chunks.push(bytes);total+=bytes.length;
+      const all=new Uint8Array(total);let offset=0;
+      chunks.forEach((chunk)=>{all.set(chunk,offset);offset+=chunk.length;});
+      for(let p=0;p+80<=all.length;p+=80) {
+        const card=Array.from(all.subarray(p,p+80)).map((byte)=>String.fromCharCode(byte)).join("");
+        const key=card.slice(0,8).trim();
+        if(key==="END"){headerEnd=p+80;complete=true;break;}
+      }
+      if(complete) {
+        for(let p=0;p<headerEnd;p+=80) {
+          const card=Array.from(all.subarray(p,p+80)).map((byte)=>String.fromCharCode(byte)).join("");
+          const key=card.slice(0,8).trim();
+          if(key==="END")break;
+          if(card[8]==="=") {
+            const value=parseFitsHeaderValue(card);
+            headers[key]=value;
+            headerCards.push({key:key,value:value,card:card});
+          }
+        }
+        const signature=headerCards.find((card)=>card.key==="SIMPLE");
+        if(!signature || signature.value!==true)throw new Error("The remote/local file does not have a valid SIMPLE = T primary FITS header.");
+        return {headers,headerCards,headerEnd,headerBytes:all.slice(0,Math.ceil(headerEnd/2880)*2880),dataOffset:Math.ceil(headerEnd/2880)*2880};
+      }
+    }
+    throw new Error(total>=FITS_MAX_HEADER_BYTES
+      ? "No END card found within the 16 MB primary-header safety limit."
+      : "FITS header is incomplete or missing its END card.");
+  }
+  async function renderFitsRangePreview(file) {
+    const parsed=await readFitsPrimaryHeader(file);
+    const headers=parsed.headers,headerEnd=parsed.headerEnd,dataOffset=parsed.dataOffset;
+    const bitpix=Number(headers.BITPIX),naxis=Number(headers.NAXIS),width=Number(headers.NAXIS1),height=Number(headers.NAXIS2);
+    const details=parsed.headerCards.map((card)=>card.key.padEnd(8," ")+" = "+safeText(card.value)).join("\n");
+    addHeading(file.isRangeSource ? "Remote FITS range viewer" : "Large FITS image viewer",
+      "Reads only the primary HDU header and a distributed set of pixel rows. Large cubes use the first 2-D plane. The full source is not loaded into memory and is never changed.");
+    addPre(details || "FITS header parsed.", "PRIMARY HDU HEADER");
+    const signature=await readHead(file,9);
+    const signatureText=Array.from(signature).map((byte)=>String.fromCharCode(byte)).join("");
+    if(!signatureText.startsWith("SIMPLE  ="))throw new Error("FITS SIMPLE signature was not found at byte zero.");
+    if(![8,16,32,-32,-64].includes(bitpix) || !Number.isSafeInteger(width) || !Number.isSafeInteger(height) || naxis<2 || width<1 || height<1) {
+      metaStrip([["FORMAT","FITS primary"],["BITPIX",safeText(headers.BITPIX)],["AXES",safeText(naxis)],["HEADER","Complete"]]);
+      addNotice("The primary HDU is not a supported 2-D numeric image. This range viewer currently previews primary images; table-only FITS files and some tiled/compressed-image extensions need an extension-aware reader.","warn");
+      currentPreview={type:"fits",text:details,largeFile:true};
+      $("#viewerCopy").disabled=false;
+      setTargets([{value:"report-json",label:"Export file report → JSON"},{value:"zip",label:"Create ZIP archive"}]);
+      return;
+    }
+    const bytesPerPixel=Math.abs(bitpix)/8;
+    const rowBytes=width*bytesPerPixel,pixelCount=width*height;
+    if(!Number.isSafeInteger(rowBytes)||!Number.isSafeInteger(pixelCount)||rowBytes<=0||dataOffset+rowBytes>file.size) {
+      throw new Error("FITS dimensions and file size disagree, or a pixel row is too large to address safely.");
+    }
+    if(dataOffset+pixelCount*bytesPerPixel>file.size) {
+      addNotice("The first primary image plane fits within the source, but the declared image extent is incomplete. Preview values may be truncated.","warn");
+    }
+    if(rowBytes>FITS_MAX_PREVIEW_READ_BYTES)throw new Error("One FITS image row exceeds the 48 MB read budget. Use a native FITS application for this unusually wide image.");
+    const scale=Math.min(1,FITS_MAX_DISPLAY_DIMENSION/width,FITS_MAX_DISPLAY_DIMENSION/height);
+    const displayW=Math.max(1,Math.round(width*scale)),displayH=Math.max(1,Math.round(height*scale));
+    const sampleRows=Math.max(1,Math.min(displayH,FITS_MAX_SAMPLE_ROWS,Math.floor(FITS_MAX_PREVIEW_READ_BYTES/rowBytes)));
+    const sample=new Float64Array(displayW*sampleRows);
+    const bscale=Number(headers.BSCALE==null?1:headers.BSCALE);
+    const bzero=Number(headers.BZERO==null?0:headers.BZERO);
+    const blank=bitpix>0 && headers.BLANK!=null ? Number(headers.BLANK) : null;
+    const selectedRows=Array.from({length:sampleRows},(_,i)=>Math.min(height-1,Math.floor(i*height/sampleRows)));
+    let min=Infinity,max=-Infinity,completed=0;
+    const concurrency=6;
+    for(let cursor=0;cursor<selectedRows.length;cursor+=concurrency) {
+      const batch=selectedRows.slice(cursor,cursor+concurrency);
+      const rowBuffers=await Promise.all(batch.map(async(sourceY)=>{
+        const start=dataOffset+sourceY*rowBytes;
+        const bytes=new Uint8Array(await file.slice(start,start+rowBytes).arrayBuffer());
+        if(bytes.length!==rowBytes)throw new Error("Range read returned a partial FITS pixel row at source row "+sourceY+".");
+        return {sourceY,view:new DataView(bytes.buffer,bytes.byteOffset,bytes.byteLength)};
+      }));
+      for(const row of rowBuffers) {
+        const sampleY=selectedRows.indexOf(row.sourceY);
+        for(let x=0;x<displayW;x++) {
+          const sourceX=Math.min(width-1,Math.floor(x*width/displayW));
+          const raw=fitsValue(row.view,bitpix,sourceX*bytesPerPixel);
+          const idx=sampleY*displayW+x;
+          const value=raw===blank?NaN:raw*bscale+bzero;
+          sample[idx]=value;
+          if(Number.isFinite(value)){if(value<min)min=value;if(value>max)max=value;}
+        }
+      }
+      completed+=rowBuffers.length;
+      status("Sampling FITS pixels: "+completed+" / "+sampleRows+" rows; reading at most "+formatBytes(rowBytes*sampleRows)+" from the pixel plane.");
+    }
+    const span=(max-min)||1;
+    const sampledCanvas=document.createElement("canvas");sampledCanvas.width=displayW;sampledCanvas.height=sampleRows;
+    const sampleCtx=sampledCanvas.getContext("2d");
+    const sampleImage=sampleCtx.createImageData(displayW,sampleRows);
+    for(let i=0;i<sample.length;i++) {
+      const value=sample[i],v=Number.isFinite(value)?Math.max(0,Math.min(255,Math.round((value-min)/span*255))):0;
+      sampleImage.data[i*4]=v;sampleImage.data[i*4+1]=v;sampleImage.data[i*4+2]=v;sampleImage.data[i*4+3]=Number.isFinite(value)?255:0;
+    }
+    sampleCtx.putImageData(sampleImage,0,0);
+    const canvas=document.createElement("canvas");canvas.className="viewer-science-canvas";canvas.width=displayW;canvas.height=displayH;
+    const ctx=canvas.getContext("2d");ctx.drawImage(sampledCanvas,0,0,displayW,displayH);
+    const wrap=document.createElement("div");wrap.className="viewer-image-frame";wrap.append(canvas);stage().append(wrap);
+    metaStrip([["SOURCE SIZE",formatBytes(file.size)],["IMAGE",width+" × "+height],["BITPIX",String(bitpix)],["PREVIEW",displayW+" × "+displayH],["ROWS READ",String(sampleRows)+" / "+height],["PIXEL DATA",formatBytes(rowBytes*sampleRows)+" maximum"]]);
+    addNotice("Downsampled preview only: "+sampleRows+" rows were sampled across the full height. Pixel intensity uses a linear stretch of sampled values; this does not preserve scientific display settings, cube planes, calibration, or FITS compliance.","warn");
+    if(file.isRangeSource)addNotice("Remote preview uses HTTP Range. Only header bytes and selected image rows were requested; the server’s full file was not downloaded by SPACE.","success");
+    currentPreview={type:"fits",canvas:canvas,text:details,largeFile:true,rangeBased:true,dimensions:[width,height],bitpix:bitpix,rowsRead:sampleRows,bytesRead:rowBytes*sampleRows+parsed.headerBytes.length};
+    $("#viewerCopy").disabled=false;
+    setTargets([{value:"png",label:"Rendered thumbnail → PNG"},{value:"jpeg",label:"Rendered thumbnail → JPEG"},{value:"report-json",label:"Export file report → JSON"},{value:"zip",label:"Create ZIP archive"}]);
+  }
+  function validateRemoteFITSUrl(raw) {
+    let url;
+    try {url=new URL(String(raw||"").trim());} catch(_){throw new Error("Enter a complete public HTTPS URL to a FITS file.");}
+    if(url.protocol!=="https:")throw new Error("Remote FITS preview requires HTTPS.");
+    if(url.username||url.password)throw new Error("Do not include a username or password in the URL.");
+    const host=url.hostname.toLowerCase();
+    if(host==="localhost"||host.endsWith(".localhost")||host.endsWith(".local")||host.endsWith(".internal")||host==="metadata.google.internal")throw new Error("Private/local hosts are not allowed in remote preview.");
+    const ipv4=host.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+    if(ipv4) {
+      const a=Number(ipv4[1]),b=Number(ipv4[2]);
+      if(a===0||a===10||a===127||a>=224||(a===169&&b===254)||(a===172&&b>=16&&b<=31)||(a===192&&b===168)||(a===100&&b>=64&&b<=127)||(a===198&&(b===18||b===19)))throw new Error("Private, loopback, link-local or reserved IP destinations are not allowed.");
+    }
+    if(/\.fits\.gz$|\.fz$|\.fits\.fz$/i.test(url.pathname))throw new Error("Range preview needs an uncompressed, seekable FITS file. GZIP/FITS tile-compressed streams need a specialized indexed reader.");
+    return url;
+  }
+  async function fetchRemoteRange(url,start,end) {
+    if(!Number.isSafeInteger(start)||!Number.isSafeInteger(end)||start<0||end<=start)throw new Error("Invalid FITS byte range.");
+    const response=await fetch(url.href,{method:"GET",headers:{Range:"bytes="+start+"-"+(end-1)},mode:"cors",credentials:"omit",cache:"no-store",redirect:"error"});
+    if(response.status!==206) {
+      try {if(response.body&&response.body.cancel)await response.body.cancel();} catch(_){}
+      if(response.status===200)throw new Error("Server ignored the Range header and returned a full response. SPACE stopped without downloading the large file.");
+      throw new Error("Range request failed with HTTP "+response.status+". Confirm the public URL permits CORS, byte ranges, and redirects to the final file URL.");
+    }
+    const contentRange=response.headers.get("content-range");
+    const match=contentRange&&contentRange.match(/^bytes\s+(\d+)-(\d+)\/(\d+)$/i);
+    if(!match)throw new Error("The server did not expose a valid Content-Range header. Its CORS policy must expose Content-Range for large-file preview.");
+    const actualStart=Number(match[1]),actualEnd=Number(match[2]),total=Number(match[3]);
+    if(actualStart!==start||actualEnd!==Math.min(end,total)-1||!Number.isSafeInteger(total)||total<=actualEnd)throw new Error("Server returned an unexpected Content-Range for the requested FITS bytes.");
+    const bytes=new Uint8Array(await response.arrayBuffer());
+    if(bytes.length!==actualEnd-actualStart+1)throw new Error("Range response length did not match its Content-Range header.");
+    return {bytes,total,start:actualStart,end:actualEnd+1};
+  }
+  async function createRemoteFitsFile(rawUrl) {
+    const url=validateRemoteFITSUrl(rawUrl);
+    const initial=await fetchRemoteRange(url,0,FITS_RANGE_CHUNK_BYTES);
+    const cache=[{start:0,end:initial.end,bytes:initial.bytes}];
+    return {
+      name:url.pathname.split("/").pop()||"remote.fits",
+      type:"application/fits",
+      size:initial.total,
+      isRangeSource:true,
+      url:url.href,
+      slice(start,end) {
+        const from=Math.max(0,Number(start)||0),to=Math.min(this.size,Number(end)||this.size);
+        const ready=(async()=>{
+          if(to<=from) return new Uint8Array(0);
+          const saved=cache.find((item)=>item.start<=from&&item.end>=to);
+          if(saved)return saved.bytes.slice(from-saved.start,to-saved.start);
+          const response=await fetchRemoteRange(url,from,to);
+          if(response.total!==this.size)throw new Error("Remote file size changed during preview. Reload the source.");
+          return response.bytes;
+        })();
+        return {
+          size:Math.max(0,to-from),
+          arrayBuffer:async()=>{const bytes=await ready;return bytes.buffer.slice(bytes.byteOffset,bytes.byteOffset+bytes.byteLength);},
+          text:async()=>new TextDecoder().decode(await ready)
+        };
+      }
+    };
+  }
+  async function openRemoteFits() {
+    const input=$("#remoteFitsUrl"),button=$("#openRemoteFits"),url=String(input.value||"").trim();
+    if(!url){status("Enter a public HTTPS FITS URL to preview.");input.focus();return;}
+    button.disabled=true;status("Checking range support and reading the FITS header…");
+    try {
+      const file=await createRemoteFitsFile(url);
+      await renderFile(file);
+    } catch(err) {status((err&&err.message)||String(err),"error");}
+    finally {button.disabled=false;}
+  }
   async function renderFits(file) {
+    if(file.isRangeSource || file.size>MAX_CONVERT_BYTES) return renderFitsRangePreview(file);
     const fitsInspection=await inspectFitsHdus(file);
     const bytes=await readHead(file,Math.min(file.size,2880*32));
     const text=Array.from(bytes).map((b)=>String.fromCharCode(b)).join("");

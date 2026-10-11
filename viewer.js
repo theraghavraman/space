@@ -66,7 +66,8 @@
     occtJs: "https://cdn.jsdelivr.net/npm/occt-import-js@0.0.23/dist/occt-import-js.js",
     shpJs: "https://unpkg.com/shpjs@4.0.4/dist/shp.js",
     sqlJs: "https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.13.0/sql-wasm.js",
-    bz2: "https://cdn.jsdelivr.net/npm/bz2@1.0.1/index.js"
+    bz2: "https://cdn.jsdelivr.net/npm/bz2@1.0.1/index.js",
+    fitsjs: "https://cdn.jsdelivr.net/gh/astrojs/fitsjs@fc9b1946ffec4a5efc61d5be65aad259e88ffe6b/lib/fits.js"
   };
   const MODULES = {
     netcdf: "https://cdn.jsdelivr.net/npm/netcdfjs@4.0.0/+esm",
@@ -107,7 +108,8 @@
     [LIB.occtJs]:"sha384-Z8pO9JEhFZF+mvDKxMuLvPT85VP7nly8CqYjBatl0bMeW9OsaKCes4gEUPL4nihc",
     [LIB.shpJs]:"sha384-SvGz+Dog2fS8fxYIE3uf8dViVamrK+czJkTku+kw1+N5jqZULpRyEpT1JqF0PaWh",
     [LIB.sqlJs]:"sha384-DJiKBv+LC78e5InEB+MvFIAH079ynMK/ERTtFUCpDzXhH1Bht7aVfpg3yOVsuYl9",
-    [LIB.bz2]:"sha384-oHssvY2AN7qFTBvbSscGhCX88RRP8EWpSyUnGrJN8aTKEN6V65tkpF09pOi1pC6+"
+    [LIB.bz2]:"sha384-oHssvY2AN7qFTBvbSscGhCX88RRP8EWpSyUnGrJN8aTKEN6V65tkpF09pOi1pC6+",
+    [LIB.fitsjs]:"sha384-+6Cuj2QFgNNbuCbEn8C5UT82eS/onQDs+Bmt/aUZHBDePrngpu4zk4sVPOx0Itkk"
   };
   function clearStage() {
     if (typeof activeViewerCleanup === "function") { try { activeViewerCleanup(); } catch (_) {} activeViewerCleanup = null; }
@@ -744,7 +746,39 @@
     $("#viewerCopy").disabled=false;
     setTargets([{value:"report-json",label:"Export file report → JSON"},{value:"zip",label:"Create ZIP archive"}]);
   }
+  async function inspectFitsHdus(file) {
+    if(file.size>MAX_CONVERT_BYTES)return {hdus:[],error:"HDU enumeration skipped above the 100 MB browser safety limit."};
+    try {
+      await loadScript(LIB.fitsjs,()=>!!(window.astro&&window.astro.FITS));
+      const parsed=await new Promise((resolve,reject)=>{
+        let complete=false;
+        const timeout=setTimeout(()=>{if(!complete){complete=true;reject(new Error("FITS.js HDU scan timed out; showing the basic header view instead."));}},15000);
+        try {
+          new window.astro.FITS(file,function(){
+            if(complete)return;
+            complete=true;clearTimeout(timeout);resolve(this);
+          });
+        } catch(err) {
+          complete=true;clearTimeout(timeout);reject(err);
+        }
+      });
+      const hdus=(parsed.hdus||[]).map((hdu,index)=>{
+        const header=hdu.header;
+        const axisCount=Number(header.get("NAXIS")||0);
+        const dimensions=[];
+        for(let i=1;i<=Math.min(axisCount,9);i++)dimensions.push(header.get("NAXIS"+i));
+        const extType=header.get("XTENSION")||header.extensionType||(index===0?"PRIMARY":"IMAGE");
+        const dataUnit=hdu.data;
+        let type=dataUnit&&dataUnit.constructor&&dataUnit.constructor.name||"No data";
+        return {index:index,extType:safeText(extType),bitpix:header.get("BITPIX"),naxis:axisCount,dimensions:dimensions,extname:header.get("EXTNAME")||"",bunit:header.get("BUNIT")||"",dataType:type,header:header};
+      });
+      return {hdus:hdus,error:null};
+    } catch(err) {
+      return {hdus:[],error:(err&&err.message)||String(err)};
+    }
+  }
   async function renderFits(file) {
+    const fitsInspection=await inspectFitsHdus(file);
     const bytes=await readHead(file,Math.min(file.size,2880*32));
     const text=Array.from(bytes).map((b)=>String.fromCharCode(b)).join("");
     const headers={}; let end=-1;
@@ -757,14 +791,19 @@
         const num=Number(raw); headers[key]=raw!=="" && Number.isFinite(num) && !raw.startsWith("'") ? num : raw;
       }
     }
-    addHeading("FITS astronomy viewer","Primary uncompressed 2-D image planes are rendered as a visual preview; this is not FITSverify or scientific compliance validation.");
+    addHeading("FITS astronomy viewer","FITS.js parses available HDUs / extension headers; SPACE renders a conservative primary 2-D image preview. This is not FITSverify or scientific compliance validation.");
     const details=Object.entries(headers).map((e)=>e[0].padEnd(8," ")+" = "+e[1]).join("\n");
     addPre(details || text.slice(0,2880),"PRIMARY HDU HEADER");
     const bitpix=Number(headers.BITPIX), width=Number(headers.NAXIS1), height=Number(headers.NAXIS2), naxis=Number(headers.NAXIS);
     metaStrip([["BITPIX",String(headers.BITPIX||"unknown")],["DIMENSIONS",naxis>=2 ? width+" × "+height : String(naxis||"unknown")+" axis/axes"],["HEADER",end>=0?"END card found":"header incomplete"]]);
+    if(fitsInspection.hdus.length) {
+      addTable(fitsInspection.hdus.map((hdu)=>[hdu.index,hdu.extType,hdu.bitpix==null?"":hdu.bitpix,hdu.naxis,hdu.dimensions.join(" × "),hdu.extname,hdu.dataType,hdu.bunit]),
+        ["HDU","Type","BITPIX","Axes","Dimensions","EXTNAME","Data unit","BUNIT"],
+        "Parsed by astrojs/fitsjs · HDU summaries only. Image preview below is still the primary plane.");
+    } else if(fitsInspection.error) addNotice("Extended FITS reader: "+fitsInspection.error,"warn");
     if(end<0 || naxis<2 || !width || !height || ![8,16,32,-32,-64].includes(bitpix)) {
       addNotice("This FITS file has no supported primary 2-D image plane. Header inspection works; table, cube and compressed-image visualization needs a specialized FITS reader.","warn");
-      currentPreview={type:"fits",text:details};$("#viewerCopy").disabled=false;return;
+      currentPreview={type:"fits",text:details,hdus:fitsInspection.hdus};$("#viewerCopy").disabled=false;return;
     }
     const dataOffset=Math.ceil(end/2880)*2880;
     const pixelCount=width*height, bytesPerPixel=Math.abs(bitpix)/8;
@@ -787,7 +826,7 @@
     for(let i=0;i<sample.length;i++){const v=Math.max(0,Math.min(255,Math.round((sample[i]-min)/span*255)));img.data[i*4]=v;img.data[i*4+1]=v;img.data[i*4+2]=v;img.data[i*4+3]=Number.isFinite(sample[i])?255:0;}
     ctx.putImageData(img,0,0);
     const wrap=document.createElement("div");wrap.className="viewer-image-frame";wrap.append(canvas);stage().append(wrap);
-    currentPreview={type:"fits",canvas:canvas,text:details};
+    currentPreview={type:"fits",canvas:canvas,text:details,hdus:fitsInspection.hdus};
     metaStrip([["PIXEL SCALE",String(min)+" → "+String(max)],["PREVIEW",outW+" × "+outH],["RENDER","Grayscale stretch"]]);
     $("#viewerCopy").disabled=false;
   }

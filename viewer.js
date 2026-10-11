@@ -921,40 +921,149 @@
     }
     return hdus;
   }
+  function isFitsNumericImage(hdu) {
+    const h=hdu.headers||{},type=safeText(h.XTENSION||"").toUpperCase();
+    const naxis=Number(h.NAXIS||0),bitpix=Number(h.BITPIX);
+    return type!=="BINTABLE" && h.ZIMAGE!==true && naxis>=2 && [8,16,32,-32,-64].includes(bitpix)
+      && Number(h.NAXIS1)>0 && Number(h.NAXIS2)>0 && hdu.dataLength!=null;
+  }
+  function isFitsBinaryTable(hdu) {
+    const h=hdu.headers||{};
+    return safeText(h.XTENSION||"").toUpperCase()==="BINTABLE" && Number(h.NAXIS1)>0 && Number(h.NAXIS2)>=0 && Number(h.TFIELDS||0)>0;
+  }
+  function decodeFitsBinaryTable(hdu, bytes, rowCount) {
+    const h=hdu.headers,rowBytes=Number(h.NAXIS1),numFields=Number(h.TFIELDS||0);
+    const fields=[],descriptors=[];
+    let byteOffset=0;
+    for(let i=1;i<=Math.min(numFields,512);i++) {
+      const name=safeText(h["TTYPE"+i]||("COL_"+i));
+      const form=safeText(h["TFORM"+i]||"").replace(/\s+/g,"").toUpperCase();
+      const match=form.match(/^(\d*)([LXBIJKAEDCMPQ])(?:\(\d+\))?/);
+      if(!match)throw new Error("Unsupported FITS binary-table format descriptor: "+form+" ("+name+").");
+      const repeat=Number(match[1]||1),type=match[2];
+      const unit=({L:1,X:0,B:1,I:2,J:4,K:8,A:1,E:4,D:8,C:8,M:16,P:8,Q:16})[type];
+      const size=type==="X"?Math.ceil(repeat/8):repeat*unit;
+      if(!Number.isSafeInteger(size)||size<0||byteOffset+size>rowBytes)throw new Error("FITS TFORM fields exceed NAXIS1 row width.");
+      descriptors.push({name,form,repeat,type,offset:byteOffset,size});
+      fields.push(name);byteOffset+=size;
+    }
+    if(byteOffset>rowBytes)throw new Error("Parsed FITS table columns exceed the declared row width.");
+    const view=new DataView(bytes.buffer,bytes.byteOffset,bytes.byteLength);
+    const decoder=new TextDecoder("latin1");
+    const readOne=(offset,type)=>{
+      if(type==="L")return String.fromCharCode(view.getUint8(offset));
+      if(type==="B")return view.getUint8(offset);
+      if(type==="I")return view.getInt16(offset,false);
+      if(type==="J")return view.getInt32(offset,false);
+      if(type==="K")return typeof view.getBigInt64==="function"?String(view.getBigInt64(offset,false)):String(view.getInt32(offset,false));
+      if(type==="E")return view.getFloat32(offset,false);
+      if(type==="D")return view.getFloat64(offset,false);
+      if(type==="C")return [view.getFloat32(offset,false),view.getFloat32(offset+4,false)];
+      if(type==="M")return [view.getFloat64(offset,false),view.getFloat64(offset+8,false)];
+      return null;
+    };
+    const rows=[];
+    for(let rowIndex=0;rowIndex<rowCount;rowIndex++) {
+      const base=rowIndex*rowBytes,row={};
+      descriptors.forEach((field)=>{
+        const start=base+field.offset;
+        let value;
+        if(field.type==="A")value=decoder.decode(bytes.subarray(start,start+field.size)).replace(/\0+$/g,"").trimEnd();
+        else if(field.type==="X") {
+          const bitCount=Math.min(field.repeat,256),bits=[];
+          for(let b=0;b<bitCount;b++)bits.push((view.getUint8(start+Math.floor(b/8))>>(7-b%8))&1);
+          value=bits.join("");
+        } else if(field.type==="P"||field.type==="Q") {
+          const values=[];
+          for(let j=0;j<Math.min(field.repeat,8);j++) {
+            const at=start+j*(field.type==="P"?8:16);
+            values.push(field.type==="P"?[view.getInt32(at,false),view.getInt32(at+4,false)]:
+              [typeof view.getBigInt64==="function"?String(view.getBigInt64(at,false)):view.getInt32(at,false),
+               typeof view.getBigInt64==="function"?String(view.getBigInt64(at+8,false)):view.getInt32(at+8,false)]);
+          }
+          value=field.repeat===1?values[0]:values;
+        } else if(field.repeat===1)value=readOne(start,field.type);
+        else {
+          const unit=field.type==="C"?8:field.type==="M"?16:({L:1,B:1,I:2,J:4,K:8,E:4,D:8})[field.type]||1;
+          const n=Math.min(field.repeat,256),values=[];
+          for(let j=0;j<n;j++)values.push(readOne(start+j*unit,field.type));
+          value=values;
+        }
+        if(field.type==="L") {
+          if(Array.isArray(value))value=value.map((v)=>v==="T");
+          else value=value==="T";
+        }
+        row[field.name]=value;
+      });
+      rows.push(row);
+    }
+    return {fields:fields,rows:rows,columns:descriptors};
+  }
+  async function renderLargeFitsTable(file,hdu,directory) {
+    const h=hdu.headers,rowBytes=Number(h.NAXIS1),totalRows=Number(h.NAXIS2);
+    if(!Number.isSafeInteger(rowBytes)||rowBytes<=0||!Number.isSafeInteger(totalRows)||totalRows<0)
+      throw new Error("FITS BINTABLE has invalid NAXIS1/NAXIS2 dimensions.");
+    if(rowBytes>FITS_MAX_PREVIEW_READ_BYTES)throw new Error("A single FITS table row exceeds the 48 MB read budget.");
+    const rowLimit=Math.min(MAX_TABLE_ROWS,totalRows,Math.floor(FITS_MAX_PREVIEW_READ_BYTES/rowBytes));
+    addHeading(file.isRangeSource?"Remote FITS table viewer":"Large FITS binary-table viewer",
+      "Shows typed values from a bounded prefix of the BINTABLE rows using byte-range reads. The original table is not fully loaded or changed; variable-length P/Q payloads are shown as descriptors rather than dereferenced heap data.");
+    addPre(hdu.headerCards.map((card)=>card.key.padEnd(8," ")+" = "+safeText(card.value)).join("\n"),"SELECTED BINTABLE HEADER");
+    metaStrip([["SOURCE SIZE",formatBytes(file.size)],["HDU",String(hdu.index)],["TABLE",safeText(h.NAXIS2)+" rows"],["ROW WIDTH",formatBytes(rowBytes)],["SAMPLE ROWS",String(rowLimit)],["HEADER / HEAP",formatBytes(hdu.dataLength)]]);
+    const rowsBufferLength=rowBytes*rowLimit;
+    const bytes=rowsBufferLength?new Uint8Array(await file.slice(hdu.dataOffset,hdu.dataOffset+rowsBufferLength).arrayBuffer()):new Uint8Array(0);
+    if(bytes.length!==rowsBufferLength)throw new Error("FITS BINTABLE sample range returned fewer bytes than NAXIS1 × sampled rows.");
+    const decoded=decodeFitsBinaryTable(hdu,bytes,rowLimit);
+    addTable(decoded.rows.map((row)=>decoded.fields.map((field)=>row[field])),decoded.fields,
+      "Showing "+rowLimit+" of "+totalRows.toLocaleString()+" rows from HDU "+hdu.index+". Exports contain only this sample.");
+    addNotice("FITS table exports contain at most "+MAX_TABLE_ROWS+" sampled rows. P/Q variable-length column descriptors are not dereferenced; scientific units, time systems and calibration metadata require a FITS-aware workflow.","warn");
+    if(file.isRangeSource)addNotice("Remote preview fetched only FITS headers and the first table sample range. The complete source was not downloaded.","success");
+    const text=JSON.stringify({hdu:hdu.index,headers:h,rowCount:totalRows,fields:decoded.fields,rows:decoded.rows},null,2);
+    currentPreview={type:"fits",text:text,hdus:directory.map((entry)=>({index:entry.index,type:entry.xtension,dimensions:[entry.headers.NAXIS1,entry.headers.NAXIS2].filter((value)=>value!=null)})),fitsRows:decoded.rows,fitsFields:decoded.fields,fitsTableHdu:safeText(h.EXTNAME||("HDU "+hdu.index)),fitsTableRows:totalRows,largeFile:true,rangeBased:true,bytesRead:rowsBufferLength};
+    $("#viewerCopy").disabled=false;
+    setTargets([{value:"fits-table-csv",label:"Table sample → CSV"},{value:"fits-table-json",label:"Table sample → JSON"},{value:"fits-table-xlsx",label:"Table sample → XLSX"},{value:"report-json",label:"Export file report → JSON"},{value:"zip",label:"Create ZIP archive"}]);
+  }
   async function renderFitsRangePreview(file) {
-    const parsed=await readFitsPrimaryHeader(file);
-    const headers=parsed.headers,headerEnd=parsed.headerEnd,dataOffset=parsed.dataOffset;
-    const bitpix=Number(headers.BITPIX),naxis=Number(headers.NAXIS),width=Number(headers.NAXIS1),height=Number(headers.NAXIS2);
-    const details=parsed.headerCards.map((card)=>card.key.padEnd(8," ")+" = "+safeText(card.value)).join("\n");
-    addHeading(file.isRangeSource ? "Remote FITS range viewer" : "Large FITS image viewer",
-      "Reads only the primary HDU header and a distributed set of pixel rows. Large cubes use the first 2-D plane. The full source is not loaded into memory and is never changed.");
-    addPre(details || "FITS header parsed.", "PRIMARY HDU HEADER");
-    const signature=await readHead(file,9);
-    const signatureText=Array.from(signature).map((byte)=>String.fromCharCode(byte)).join("");
-    if(!signatureText.startsWith("SIMPLE  ="))throw new Error("FITS SIMPLE signature was not found at byte zero.");
-    if(![8,16,32,-32,-64].includes(bitpix) || !Number.isSafeInteger(width) || !Number.isSafeInteger(height) || naxis<2 || width<1 || height<1) {
-      metaStrip([["FORMAT","FITS primary"],["BITPIX",safeText(headers.BITPIX)],["AXES",safeText(naxis)],["HEADER","Complete"]]);
-      addNotice("The primary HDU is not a supported 2-D numeric image. This range viewer currently previews primary images; table-only FITS files and some tiled/compressed-image extensions need an extension-aware reader.","warn");
-      currentPreview={type:"fits",text:details,largeFile:true};
+    const directory=await scanFitsHdus(file,32);
+    if(!directory.length)throw new Error("No valid FITS HDU headers were found.");
+    const imageHdu=directory.find(isFitsNumericImage);
+    const tableHdu=directory.find(isFitsBinaryTable);
+    if(!imageHdu) {
+      if(tableHdu)return renderLargeFitsTable(file,tableHdu,directory);
+      const first=directory[0],headers=first.headers;
+      const details=first.headerCards.map((card)=>card.key.padEnd(8," ")+" = "+safeText(card.value)).join("\n");
+      addHeading(file.isRangeSource?"Remote FITS range viewer":"Large FITS viewer",
+        "HDU headers were scanned by byte offset, but no supported numeric image plane or BINTABLE was found.");
+      addPre(details,"PRIMARY HDU HEADER");
+      addTable(directory.map((hdu)=>[hdu.index,hdu.xtension,hdu.headers.BITPIX??"",hdu.headers.NAXIS??"",hdu.headers.NAXIS1??"",hdu.headers.NAXIS2??"",hdu.headers.EXTNAME??""]),
+        ["HDU","Type","BITPIX","NAXIS","NAXIS1","NAXIS2","EXTNAME"],"HDU directory sample.");
+      addNotice("This large FITS file may contain a compressed image extension, ASCII table, random-groups data, or unsupported extension. Header inventory is available; use a FITS-aware application for its payload.","warn");
+      currentPreview={type:"fits",text:details,largeFile:true,hdus:directory};
       $("#viewerCopy").disabled=false;
       setTargets([{value:"report-json",label:"Export file report → JSON"},{value:"zip",label:"Create ZIP archive"}]);
       return;
     }
+    const hdu=imageHdu,headers=hdu.headers,headerEnd=hdu.headerEnd,dataOffset=hdu.dataOffset;
+    const bitpix=Number(headers.BITPIX),naxis=Number(headers.NAXIS),width=Number(headers.NAXIS1),height=Number(headers.NAXIS2);
+    const details=hdu.headerCards.map((card)=>card.key.padEnd(8," ")+" = "+safeText(card.value)).join("\n");
+    addHeading(file.isRangeSource?"Remote FITS range viewer":"Large FITS image viewer",
+      "Reads the selected image HDU header and a distributed set of pixel rows. Large cubes use the first 2-D plane. The full source is not loaded into memory and is never changed.");
+    addPre(details,"HDU "+hdu.index+" HEADER");
+    if(directory.length>1)addTable(directory.map((entry)=>[entry.index,entry.xtension,entry.headers.BITPIX??"",entry.headers.NAXIS??"",entry.headers.NAXIS1??"",entry.headers.NAXIS2??"",entry.headers.EXTNAME??""]),
+      ["HDU","Type","BITPIX","NAXIS","NAXIS1","NAXIS2","EXTNAME"],"Header-only directory; payload bytes are skipped by their FITS offsets.");
     const bytesPerPixel=Math.abs(bitpix)/8;
     const rowBytes=width*bytesPerPixel,pixelCount=width*height;
     if(!Number.isSafeInteger(rowBytes)||!Number.isSafeInteger(pixelCount)||rowBytes<=0||dataOffset+rowBytes>file.size) {
       throw new Error("FITS dimensions and file size disagree, or a pixel row is too large to address safely.");
     }
     if(dataOffset+pixelCount*bytesPerPixel>file.size) {
-      addNotice("The first primary image plane fits within the source, but the declared image extent is incomplete. Preview values may be truncated.","warn");
+      addNotice("The selected image plane appears to extend beyond the declared source length. The preview will fail safely if any sampled range is incomplete.","warn");
     }
     if(rowBytes>FITS_MAX_PREVIEW_READ_BYTES)throw new Error("One FITS image row exceeds the 48 MB read budget. Use a native FITS application for this unusually wide image.");
     const scale=Math.min(1,FITS_MAX_DISPLAY_DIMENSION/width,FITS_MAX_DISPLAY_DIMENSION/height);
     const displayW=Math.max(1,Math.round(width*scale)),displayH=Math.max(1,Math.round(height*scale));
     const sampleRows=Math.max(1,Math.min(displayH,FITS_MAX_SAMPLE_ROWS,Math.floor(FITS_MAX_PREVIEW_READ_BYTES/rowBytes)));
     const sample=new Float64Array(displayW*sampleRows);
-    const bscale=Number(headers.BSCALE==null?1:headers.BSCALE);
-    const bzero=Number(headers.BZERO==null?0:headers.BZERO);
+    const bscale=Number(headers.BSCALE==null?1:headers.BSCALE),bzero=Number(headers.BZERO==null?0:headers.BZERO);
     const blank=bitpix>0 && headers.BLANK!=null ? Number(headers.BLANK) : null;
     const selectedRows=Array.from({length:sampleRows},(_,i)=>Math.min(height-1,Math.floor(i*height/sampleRows)));
     let min=Infinity,max=-Infinity,completed=0;
@@ -972,31 +1081,29 @@
         for(let x=0;x<displayW;x++) {
           const sourceX=Math.min(width-1,Math.floor(x*width/displayW));
           const raw=fitsValue(row.view,bitpix,sourceX*bytesPerPixel);
-          const idx=sampleY*displayW+x;
-          const value=raw===blank?NaN:raw*bscale+bzero;
+          const idx=sampleY*displayW+x,value=raw===blank?NaN:raw*bscale+bzero;
           sample[idx]=value;
           if(Number.isFinite(value)){if(value<min)min=value;if(value>max)max=value;}
         }
       }
       completed+=rowBuffers.length;
-      status("Sampling FITS pixels: "+completed+" / "+sampleRows+" rows; reading at most "+formatBytes(rowBytes*sampleRows)+" from the pixel plane.");
+      status("Sampling FITS HDU "+hdu.index+": "+completed+" / "+sampleRows+" rows; sampling at most "+formatBytes(rowBytes*sampleRows)+" of pixel data.");
     }
-    const span=(max-min)||1;
-    const sampledCanvas=document.createElement("canvas");sampledCanvas.width=displayW;sampledCanvas.height=sampleRows;
-    const sampleCtx=sampledCanvas.getContext("2d");
-    const sampleImage=sampleCtx.createImageData(displayW,sampleRows);
+    const span=(max-min)||1,sampledCanvas=document.createElement("canvas");
+    sampledCanvas.width=displayW;sampledCanvas.height=sampleRows;
+    const sampleCtx=sampledCanvas.getContext("2d"),sampleImage=sampleCtx.createImageData(displayW,sampleRows);
     for(let i=0;i<sample.length;i++) {
       const value=sample[i],v=Number.isFinite(value)?Math.max(0,Math.min(255,Math.round((value-min)/span*255))):0;
       sampleImage.data[i*4]=v;sampleImage.data[i*4+1]=v;sampleImage.data[i*4+2]=v;sampleImage.data[i*4+3]=Number.isFinite(value)?255:0;
     }
     sampleCtx.putImageData(sampleImage,0,0);
     const canvas=document.createElement("canvas");canvas.className="viewer-science-canvas";canvas.width=displayW;canvas.height=displayH;
-    const ctx=canvas.getContext("2d");ctx.drawImage(sampledCanvas,0,0,displayW,displayH);
+    canvas.getContext("2d").drawImage(sampledCanvas,0,0,displayW,displayH);
     const wrap=document.createElement("div");wrap.className="viewer-image-frame";wrap.append(canvas);stage().append(wrap);
-    metaStrip([["SOURCE SIZE",formatBytes(file.size)],["IMAGE",width+" × "+height],["BITPIX",String(bitpix)],["PREVIEW",displayW+" × "+displayH],["ROWS READ",String(sampleRows)+" / "+height],["PIXEL DATA",formatBytes(rowBytes*sampleRows)+" maximum"]]);
-    addNotice("Downsampled preview only: "+sampleRows+" rows were sampled across the full height. Pixel intensity uses a linear stretch of sampled values; this does not preserve scientific display settings, cube planes, calibration, or FITS compliance.","warn");
-    if(file.isRangeSource)addNotice("Remote preview uses HTTP Range. Only header bytes and selected image rows were requested; the server’s full file was not downloaded by SPACE.","success");
-    currentPreview={type:"fits",canvas:canvas,text:details,largeFile:true,rangeBased:true,dimensions:[width,height],bitpix:bitpix,rowsRead:sampleRows,bytesRead:rowBytes*sampleRows+parsed.headerBytes.length};
+    metaStrip([["SOURCE SIZE",formatBytes(file.size)],["HDU",String(hdu.index)],["IMAGE",width+" × "+height],["BITPIX",String(bitpix)],["PREVIEW",displayW+" × "+displayH],["ROWS READ",String(sampleRows)+" / "+height],["PIXEL DATA",formatBytes(rowBytes*sampleRows)+" maximum"]]);
+    addNotice("Downsampled preview only: "+sampleRows+" rows were sampled across the full height. Pixel intensity uses a linear stretch of sampled values; cube preview selects the first 2-D plane, and no scientific calibration or FITS compliance validation is performed.","warn");
+    if(file.isRangeSource)addNotice("Remote preview uses HTTP Range. Only selected header blocks and image rows were fetched; the server's full file was not downloaded.","success");
+    currentPreview={type:"fits",canvas:canvas,text:details,largeFile:true,rangeBased:true,dimensions:[width,height],bitpix:bitpix,hdu:hdu.index,rowsRead:sampleRows,bytesRead:rowBytes*sampleRows+hdu.headerBytes.length,hdus:directory};
     $("#viewerCopy").disabled=false;
     setTargets([{value:"png",label:"Rendered thumbnail → PNG"},{value:"jpeg",label:"Rendered thumbnail → JPEG"},{value:"report-json",label:"Export file report → JSON"},{value:"zip",label:"Create ZIP archive"}]);
   }

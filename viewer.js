@@ -32,7 +32,7 @@
     const m = name.match(/(\.[a-z0-9][a-z0-9._-]*)$/);
     if (!m) return "";
     const ext = m[1];
-    const known = [".nii.gz",".fits.gz",".tar.gz",".nc4",".hdf5",".geojson",".shp.xml",".votable.xml",".jsonl",".ndjson",".fits.fz",".fits"," .jpeg".trim(),".tiff",".jp2",".jpeg2000",".glb",".gltf",".parquet",".feather",".arrow",".sqlite",".gpkg",".grib2",".grb2",".grib",".grb",".tsv",".csv",".json",".xml",".yaml",".yml",".pdf",".xlsx",".xlsm",".xlsb",".xlsx",".xls",".ods",".zip",".bz2",".gz",".las",".laz",".e57",".png",".jpg",".webp",".gif",".bmp",".avif",".svg",".mp4",".mov",".webm",".mkv",".mp3",".wav",".ogg",".flac",".fits",".nc",".cdf",".h5",".hdf",".fits",".bsp",".spk",".ck",".pck",".dsk",".vot",".kml",".kmz",".gpx",".pcap",".log",".txt",".md",".yaml",".yml",".stl",".obj",".3mf",".step",".stp",".iges",".vtk",".vtp",".pds",".lbl",".img",".bin",".dat",".ipynb",".py",".sql"];
+    const known = [".nii.gz",".fits.gz",".tar.gz",".zarr.zip",".nc4",".hdf5",".geojson",".shp.xml",".votable.xml",".jsonl",".ndjson",".fits.fz",".fits"," .jpeg".trim(),".tiff",".jp2",".jpeg2000",".glb",".gltf",".parquet",".feather",".arrow",".sqlite",".gpkg",".grib2",".grb2",".grib",".grb",".tsv",".csv",".json",".xml",".yaml",".yml",".pdf",".xlsx",".xlsm",".xlsb",".xlsx",".xls",".ods",".zip",".bz2",".gz",".las",".laz",".e57",".png",".jpg",".webp",".gif",".bmp",".avif",".svg",".mp4",".mov",".webm",".mkv",".mp3",".wav",".ogg",".flac",".fits",".nc",".cdf",".h5",".hdf",".fits",".bsp",".spk",".ck",".pck",".dsk",".vot",".kml",".kmz",".gpx",".pcap",".log",".txt",".md",".yaml",".yml",".stl",".obj",".3mf",".step",".stp",".iges",".vtk",".vtp",".pds",".lbl",".img",".bin",".dat",".ipynb",".py",".sql"];
     known.sort((a,b)=>b.length-a.length);
     return known.find((e)=>name.endsWith(e)) || ext;
   }
@@ -72,6 +72,7 @@
     netcdf: "https://cdn.jsdelivr.net/npm/netcdfjs@4.0.0/+esm",
     hdf5: "https://cdn.jsdelivr.net/npm/h5wasm@0.10.3/dist/esm/hdf5_hl.js",
     parquet: "https://cdn.jsdelivr.net/npm/hyparquet@1.31.3/src/index.min.js",
+    zarr: "https://cdn.jsdelivr.net/npm/zarrita@0.7.5/+esm",
     arrow: "https://cdn.jsdelivr.net/npm/apache-arrow@21.2.0/+esm",
     three: "https://esm.sh/three@0.180.0",
     stlLoader: "https://esm.sh/three@0.180.0/examples/jsm/loaders/STLLoader.js",
@@ -217,6 +218,7 @@
     if (kind === "xml") return [{value:"json",label:"XML → JSON (simple documents)"}, {value:"xml",label:"Normalize XML"}].concat(common);
     if (kind === "workbook") return [{value:"csv",label:"Selected sheet → CSV"}, {value:"tsv",label:"Selected sheet → TSV"}, {value:"json",label:"Selected sheet → JSON"}].concat(common);
     if (kind === "parquet" || kind === "arrow") return [{value:"csv",label:"Preview rows → CSV"}, {value:"tsv",label:"Preview rows → TSV"}, {value:"json",label:"Preview rows → JSON"}, {value:"xlsx",label:"Preview rows → XLSX"}].concat(common);
+    if (kind === "zarr") return [{value:"zarr-csv",label:"Sample slice → CSV"}, {value:"zarr-json",label:"Sample slice → JSON"}, {value:"zarr-xlsx",label:"Sample slice → XLSX"}].concat(common);
     if (kind === "sqlite") return [{value:"sql-csv",label:"Query results → CSV"}, {value:"sql-tsv",label:"Query results → TSV"}, {value:"sql-json",label:"Query results → JSON"}, {value:"sql-xlsx",label:"Query results → XLSX"}].concat(common);
     if (kind === "geojson") return [{value:"shape-geojson",label:"Export features → GeoJSON"}, {value:"json-pretty",label:"Pretty-print GeoJSON"}, {value:"json-min",label:"Minify GeoJSON"}, {value:"geojson-csv",label:"Feature properties + geometry → CSV"}].concat(common);
     if (kind === "mesh3d") return [{value:"mesh-stl",label:"3D model → STL mesh"}, {value:"mesh-obj",label:"3D model → OBJ mesh"}].concat(common);
@@ -847,6 +849,74 @@
     currentPreview={type:"tar",entries:entries,text:JSON.stringify(names,null,2)};
     setTargets([{value:"report-json",label:"Export archive inventory → JSON"},{value:"zip",label:"Wrap original archive in ZIP"}]);
   }
+  async function renderZarrArchive(entries, file) {
+    const allNames=Object.keys(entries).filter((name)=>!name.endsWith("/"));
+    const metadataPaths=allNames.filter((name)=>/(^|\/)(\.zarray|zarr\.json)$/.test(name));
+    if(!metadataPaths.length)throw new Error("No Zarr array metadata (.zarray or zarr.json) found inside this archive.");
+    const firstParts=allNames.map((name)=>name.split("/")[0]).filter(Boolean);
+    const commonTop=firstParts.length && firstParts.every((part)=>part===firstParts[0]) && allNames.every((name)=>name.includes("/")) ? firstParts[0]+"/" : "";
+    const store=new Map();
+    for(const name of allNames){
+      const clean=commonTop && name.startsWith(commonTop) ? name.slice(commonTop.length) : name;
+      store.set("/"+clean.replace(/^\/+/,""),entries[name]);
+    }
+    const zarr=await importModule(MODULES.zarr);
+    const arrays=[];
+    for(const path of metadataPaths){
+      const clean=commonTop && path.startsWith(commonTop) ? path.slice(commonTop.length) : path;
+      let metadata={};
+      try {metadata=JSON.parse(new TextDecoder().decode(entries[path]));} catch(_){continue;}
+      const isArray=clean.endsWith("/.zarray") || clean===".zarray" || ((clean.endsWith("/zarr.json")||clean==="zarr.json") && metadata.node_type==="array");
+      if(isArray){
+        const arrayPath=clean.replace(/\/(\.zarray|zarr\.json)$/,"");
+        arrays.push({path:arrayPath,metadata,metaFile:path});
+      }
+    }
+    if(!arrays.length)throw new Error("Zarr group metadata was found, but no array metadata could be parsed. This ZIP may contain a group with no directly listed arrays.");
+    const selected=arrays[0];
+    const location=zarr.root(store).resolve(selected.path ? "/"+selected.path : "/");
+    const array=await zarr.open(location,{kind:"array"});
+    const shape=Array.from(array.shape||[]);
+    const attrs=array.attrs||selected.metadata.attributes||{};
+    const chunks=Array.from(array.chunks||selected.metadata.chunks||[]);
+    addHeading("Zarr v2 / v3 array viewer","Reads one array from a zipped Zarr store through zarrita.js. The preview is a bounded sample slice; chunk codecs vary by Zarr version and store.");
+    metaStrip([["ZARR ARRAYS",String(arrays.length)],["SHAPE",shape.join(" × ")||"unknown"],["DTYPE",String(array.dtype||selected.metadata.dtype||selected.metadata.data_type||"unknown")],["CHUNKS",chunks.join(" × ")||"metadata-defined"]]);
+    addPre(JSON.stringify({selectedArray:selected.path||"/",metadata:selected.metadata,attributes:attrs},null,2),"ARRAY METADATA & ATTRIBUTES");
+    const rows=[],headers=[];
+    let sample=null,sampleShape=[];
+    try {
+      if(shape.length) {
+        const selection=shape.map((dim,i)=>zarr.slice(0,Math.min(Number(dim)||1,i===0?30:i===1?40:1)));
+        sample=await zarr.get(array,selection);
+        sampleShape=Array.from(sample.shape||[]);
+        const values=Array.from(sample.data||[]);
+        if(shape.length===1) {
+          headers.push("Index","Value");
+          for(let i=0;i<Math.min(values.length,MAX_TABLE_ROWS);i++)rows.push([i,values[i]]);
+        } else {
+          const width=sampleShape[1]||1,height=sampleShape[0]||1;
+          for(let c=0;c<Math.min(width,40);c++)headers.push("Column "+(c+1));
+          for(let row=0;row<Math.min(height,MAX_TABLE_ROWS);row++){
+            const valuesRow=[];
+            for(let col=0;col<headers.length;col++){const idx=row*width+col;valuesRow.push(idx<values.length?values[idx]:"");}
+            rows.push(valuesRow);
+          }
+        }
+      }
+    } catch(err) {
+      addNotice("Array metadata loaded, but sample decoding failed: "+err.message+". The store may use a codec or datatype that needs additional support.","warn");
+    }
+    if(rows.length)addTable(rows,headers,"Bounded sample: "+sampleShape.join(" × ")+". Higher dimensions are sampled at index 0 beyond the first two axes.");
+    else addNotice("Array metadata is available, but sample values could not be decoded. Try a Zarr store with supported codecs or the provider's official reader.","warn");
+    const extra=allNames.length>1000 ? " First 1,000 archive entries listed." : "";
+    addTable(allNames.slice(0,1000).map((name)=>[name,formatBytes(entries[name].byteLength)]),["Store key","Bytes"],"Local store inventory."+extra);
+    const printableRows=rows.map((row)=>Object.fromEntries(headers.map((header,i)=>[header,row[i]])));
+    currentPreview={type:"zarr",rows:printableRows,headers:headers,shape:shape,dtype:String(array.dtype||selected.metadata.dtype||selected.metadata.data_type||""),metadata:selected.metadata,attributes:attrs,sampleShape:sampleShape,arrayPath:selected.path,text:JSON.stringify({metadata:selected.metadata,attributes:attrs},null,2)};
+    $("#viewerCopy").disabled=false;
+    const fakeZarrFile=new File([new Uint8Array(0)],file.name.replace(/\.zip$/i,"").replace(/\.zarr$/i,"")+".zarr",{type:"application/octet-stream"});
+    activeFormatRecord=await findFormatRecord(fakeZarrFile);
+    setTargets(targetsFor(file,"zarr"));
+  }
   async function renderArchive(file) {
     if(file.size>MAX_CONVERT_BYTES) throw new Error("Archive is over the 100 MB browser extraction limit; use a desktop archive tool for larger data.");
     await loadScript(LIB.fflate,()=>!!window.fflate);
@@ -878,6 +948,12 @@
     }
     entries=window.fflate.unzipSync(bytes);activeArchive=entries;
     const names=Object.keys(entries);
+    const hasZarrMetadata=names.some((name)=>/(^|\/)(\.zarray|zarr\.json)$/.test(name));
+    if(hasZarrMetadata) {
+      await renderZarrArchive(entries,file);
+      addNotice("Zarr archive remains unchanged. Exports refer only to the displayed sample slice, not the complete multidimensional store.","warn");
+      return;
+    }
     const kmlName=names.find((name)=>/\.kml$/i.test(name));
     if(kmlName) {
       const kmlFile=new File([entries[kmlName]],kmlName,{type:"application/vnd.google-earth.kml+xml"});
@@ -1187,7 +1263,7 @@
         kind="xml";setTargets(targetsFor(file,kind));await renderXml(file);
       } else if(ext===".tar" || ext===".tar.gz" || /\.tgz$/i.test(file.name)) {
         kind="tar";await renderTarFile(file);
-      } else if([".zip",".kmz"].includes(ext) || ext===".gz" || ext===".bz2" || /\.gz$/i.test(file.name)) {
+      } else if([".zip",".kmz",".zarr.zip"].includes(ext) || ext===".gz" || ext===".bz2" || /\.gz$/i.test(file.name)) {
         kind=ext===".gz"?"gzip":"zip";await renderArchive(file);
       } else if([".mp3",".wav",".ogg",".flac",".m4a",".aac"].includes(ext) || (file.type&&file.type.startsWith("audio/"))) {
         kind="audio";addHeading("Audio player","Playback depends on the codecs supported by this browser.");
@@ -1351,6 +1427,24 @@
         const exported=target==="mesh-stl"?exporter.parse(currentPreview.object,{binary:true}):exporter.parse(currentPreview.object);
         blob=new Blob([exported],{type:target==="mesh-stl"?"model/stl":"text/plain;charset=utf-8"});
         name=file.name.replace(/\.[^.]+$/,"")+(target==="mesh-stl"?".stl":".obj");
+      } else if(["zarr-csv","zarr-json","zarr-xlsx"].includes(target)) {
+        const rows=currentPreview.type==="zarr"?currentPreview.rows:[],fields=currentPreview.type==="zarr"?currentPreview.headers:[];
+        if(!rows.length||!fields.length)throw new Error("No Zarr sample values are available to export.");
+        if(target==="zarr-json") {
+          blob=new Blob([JSON.stringify({shape:currentPreview.shape,dtype:currentPreview.dtype,attributes:currentPreview.attributes,columns:fields,rows:rows},null,2)],{type:"application/json;charset=utf-8"});
+          name=file.name.replace(/\.zip$/i,"")+".sample.json";
+        } else if(target==="zarr-xlsx") {
+          await loadScript(LIB.sheet,()=>!!window.XLSX);
+          const workbook=window.XLSX.utils.book_new(),sheet=window.XLSX.utils.json_to_sheet(rows,{header:fields});
+          window.XLSX.utils.book_append_sheet(workbook,sheet,"Zarr sample");
+          blob=new Blob([window.XLSX.write(workbook,{bookType:"xlsx",type:"array"})],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
+          name=file.name.replace(/\.zip$/i,"")+".sample.xlsx";
+        } else {
+          await loadScript(LIB.papa,()=>!!window.Papa);
+          const content=window.Papa.unparse({fields:fields,data:rows.map((row)=>fields.map((field)=>row[field]))},{newline:"\r\n"});
+          blob=new Blob([content],{type:"text/csv;charset=utf-8"});
+          name=file.name.replace(/\.zip$/i,"")+".sample.csv";
+        }
       } else if(["sql-csv","sql-tsv","sql-json","sql-xlsx"].includes(target)) {
         const rows=currentPreview.type==="sqlite"?currentPreview.rows:[],fields=currentPreview.type==="sqlite"?currentPreview.headers:[];
         if(!rows.length||!fields.length)throw new Error("Run a SELECT query that returns rows before exporting the SQLite query result.");

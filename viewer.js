@@ -62,6 +62,16 @@
     geotiff: "https://cdn.jsdelivr.net/npm/geotiff@2.1.3/dist-browser/geotiff.js",
     modelViewer: "https://ajax.googleapis.com/ajax/libs/model-viewer/4.0.0/model-viewer.min.js"
   };
+  const MODULES = {
+    netcdf: "https://cdn.jsdelivr.net/npm/netcdfjs@4.0.0/+esm",
+    hdf5: "https://cdn.jsdelivr.net/npm/h5wasm@0.10.3/dist/esm/hdf5_hl.js",
+    parquet: "https://cdn.jsdelivr.net/npm/hyparquet@1.31.3/src/index.min.js"
+  };
+  const modulePromises = {};
+  async function importModule(url) {
+    if (!modulePromises[url]) modulePromises[url] = import(url);
+    return modulePromises[url];
+  }
   const LIB_SRI = {
     [LIB.papa]:"sha384-Jd2/X5FXVKahwaY2nivvw4LfSTg9idSj8yNXWtT4qef0fHSYr6M7M8bJAfbFYoMc",
     [LIB.sheet]:"sha384-EnyY0/GSHQGSxSgMwaIPzSESbqoOLSexfnSMN2AP+39Ckmn92stwABZynq1JyzdT",
@@ -178,6 +188,7 @@
     if (kind === "yaml") return [{value:"json",label:"YAML → JSON"}, {value:"yaml",label:"Normalize YAML"}].concat(common);
     if (kind === "xml") return [{value:"json",label:"XML → JSON (simple documents)"}, {value:"xml",label:"Normalize XML"}].concat(common);
     if (kind === "workbook") return [{value:"csv",label:"Selected sheet → CSV"}, {value:"tsv",label:"Selected sheet → TSV"}, {value:"json",label:"Selected sheet → JSON"}].concat(common);
+    if (kind === "parquet") return [{value:"csv",label:"Preview rows → CSV"}, {value:"tsv",label:"Preview rows → TSV"}, {value:"json",label:"Preview rows → JSON"}].concat(common);
     if (kind === "zip") return common;
     if (kind === "gzip") return [{value:"decompress",label:"Decompress GZIP"}].concat(common);
     return common;
@@ -315,6 +326,138 @@
     next.onclick=()=>renderPage(Math.min(pdf.numPages,currentPreview.page+1)).catch((e)=>status("PDF render error: "+e.message,"error"));
     await renderPage(1);
     $("#viewerCopy").disabled=true;
+  }
+  async function renderNetCDF(file) {
+    if (file.size > MAX_CONVERT_BYTES) throw new Error("NetCDF preview is limited to 100 MB in the browser.");
+    const module = await importModule(MODULES.netcdf);
+    if (typeof module.NetCDFReader !== "function") throw new Error("NetCDF JavaScript reader API was not available.");
+    const reader = new module.NetCDFReader(new Uint8Array(await file.arrayBuffer()));
+    const dimensions = (reader.dimensions || []).map((d) => [d.name, d.size]);
+    const variables = (reader.variables || []).map((v) => [v.name, (v.dimensions || []).map((d) => typeof d === "string" ? d : d.name || d).join(" × "), v.type || "", v.size == null ? "" : String(v.size), JSON.stringify(v.attributes || [])]);
+    addHeading("NetCDF classic / 64-bit offset viewer", "Reads NetCDF classic formats through netcdfjs. NetCDF-4/HDF5 containers use the HDF5 viewer instead; this is a metadata/sample preview, not a replacement for calibrated scientific analysis.");
+    metaStrip([["VERSION",reader.version || "NetCDF"],["DIMENSIONS",String(dimensions.length)],["VARIABLES",String(variables.length)]]);
+    addTable(variables,["Variable","Dimensions","Type","Elements","Attributes"],"Variable metadata. The selected data shown below is sampled only when the variable is small.");
+    if (dimensions.length) addTable(dimensions,["Dimension","Length"],"Named dimensions.");
+    const first = (reader.variables || []).find((v) => Number(v.size) > 0 && Number(v.size) <= 2000);
+    if (first) {
+      try {
+        const values = reader.getDataVariable(first.name || first);
+        const array = Array.from(values || []).slice(0,2000).map((v) => [v]);
+        addTable(array,["Value"],"Sample values for " + first.name + "; values are shown in the source's numeric representation.");
+      } catch (err) { addNotice("Variable values could not be decoded: " + err.message,"warn"); }
+    } else if (variables.length) addNotice("No variable with at most 2,000 elements was auto-read. Metadata is available; use a specialist scientific workflow for large arrays.","warn");
+    const attrs = (reader.globalAttributes || []).map((a) => [a.name, a.type || "", typeof a.value === "object" ? JSON.stringify(a.value) : safeText(a.value)]);
+    if (attrs.length) addTable(attrs,["Global attribute","Type","Value"],"Global attributes.");
+    currentPreview = {type:"netcdf", text: JSON.stringify({dimensions:dimensions,variables:variables},null,2)};
+    $("#viewerCopy").disabled = false;
+  }
+  async function renderHDF5(file) {
+    if (file.size > MAX_CONVERT_BYTES) throw new Error("HDF5/Nexus preview is limited to 100 MB in the browser. Use a native HDF5 tool for larger files.");
+    const module = await importModule(MODULES.hdf5);
+    const h5 = module.default || module.h5wasm || module;
+    if (!h5 || !h5.ready) throw new Error("HDF5 WebAssembly reader did not initialize.");
+    const loaded = await h5.ready;
+    const FS = (loaded && loaded.FS) || h5.FS;
+    if (!FS || typeof h5.File !== "function") throw new Error("HDF5 reader API is unavailable in this browser.");
+    const safeName = "/space-" + Date.now() + "-" + file.name.replace(/[^a-zA-Z0-9_.-]/g,"_").slice(-90);
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    let handle = null, datasets = [];
+    try {
+      FS.writeFile(safeName, bytes);
+      handle = new h5.File(safeName,"r");
+      const visit = (node,path,depth) => {
+        if (!node || datasets.length >= 500 || depth > 6) return;
+        let keys = [];
+        try { keys = typeof node.keys === "function" ? node.keys() : []; } catch (_) {}
+        if (keys && keys.length) {
+          keys.slice(0,100).forEach((key) => {
+            const childPath = (path === "/" ? "" : path) + "/" + key;
+            let child = null;
+            try { child = handle.get(childPath); } catch (_) { try { child = node.get(key); } catch (__) {} }
+            if (!child) return;
+            let subkeys = [];
+            try { subkeys = typeof child.keys === "function" ? child.keys() : []; } catch (_) {}
+            if (subkeys && subkeys.length) {
+              datasets.push([childPath,"Group","",String(subkeys.length),""]);
+              visit(child,childPath,depth+1);
+            } else {
+              const shape = Array.from(child.shape || child.metadata && child.metadata.shape || []);
+              const dtype = child.dtype || child.metadata && child.metadata.dtype || "";
+              const count = shape.length ? shape.reduce((a,b) => a * Number(b || 0),1) : Number(child.metadata && child.metadata.total_size || 0);
+              datasets.push([childPath,"Dataset",shape.join(" × "),String(count),String(dtype)]);
+              if (shape.length && count > 0 && count <= 2000) {
+                try {
+                  const values = typeof child.to_array === "function" ? child.to_array() : child.value;
+                  const flat = [];
+                  const flatten = (v) => { if(Array.isArray(v) || ArrayBuffer.isView(v)){for(const x of v)flatten(x);} else if(flat.length<2000) flat.push(v); };
+                  flatten(values);
+                  if (flat.length) child.__spaceSample = flat.slice(0,2000);
+                } catch (_) {}
+              }
+            }
+          });
+        }
+      };
+      visit(handle,"/",0);
+      addHeading("HDF5 / NetCDF-4 / NeXus viewer","Lists groups, dataset shapes and datatypes using h5wasm (WebAssembly HDF5). Small datasets may show a sample; compression filters and some exotic datatypes require additional plugins.");
+      metaStrip([["CONTAINER","HDF5"],["OBJECTS",String(datasets.length)],["FILE SIZE",formatBytes(file.size)]]);
+      addTable(datasets,["Path","Kind","Shape","Elements / children","Datatype"],"Object tree limited to 500 entries and depth 6.");
+      const sample = [];
+      const find = (node,path,depth) => {
+        if(!node || sample.length || depth>6) return;
+        let keys=[];try{keys=typeof node.keys==="function"?node.keys():[];}catch(_){}
+        for(const key of keys||[]) {
+          let child=null;const childPath=(path==="/"?"":path)+"/"+key;
+          try{child=handle.get(childPath);}catch(_){}
+          if(!child)continue;
+          let subkeys=[];try{subkeys=typeof child.keys==="function"?child.keys():[];}catch(_){}
+          if(subkeys&&subkeys.length){find(child,childPath,depth+1);continue;}
+          const shape=Array.from(child.shape||child.metadata&&child.metadata.shape||[]);
+          const count=shape.length?shape.reduce((a,b)=>a*Number(b||0),1):Infinity;
+          if(count>0&&count<=2000) {
+            try {
+              const values=typeof child.to_array==="function"?child.to_array():child.value;
+              const flat=[];const flatten=(v)=>{if(Array.isArray(v)||ArrayBuffer.isView(v)){for(const x of v)flatten(x);}else if(flat.length<2000)flat.push(v);};flatten(values);
+              if(flat.length) sample.push({path:childPath,values:flat.slice(0,2000)});
+            } catch (_) {}
+          }
+          if(sample.length)break;
+        }
+      };
+      find(handle,"/",0);
+      if(sample.length) addTable(sample[0].values.map((v,i)=>[i,v]),["Index","Value"],"Sample from " + sample[0].path + "; source file remains unchanged.");
+      else addNotice("Metadata listing loaded, but no small dataset could be auto-sampled. Use the HDF5-aware official application for full inspection.","warn");
+      currentPreview={type:"hdf5",text:JSON.stringify(datasets,null,2)};
+      $("#viewerCopy").disabled=false;
+    } finally {
+      try { if(handle && typeof handle.close==="function") handle.close(); } catch (_) {}
+      try { FS.unlink(safeName); } catch (_) {}
+    }
+  }
+  async function parseParquetFile(file) {
+    if (file.size > MAX_CONVERT_BYTES) throw new Error("Parquet preview is limited to 100 MB in the browser. Use a row-group/columnar query engine for larger files.");
+    const module=await importModule(MODULES.parquet);
+    if(typeof module.parquetMetadataAsync!=="function" || typeof module.parquetReadObjects!=="function") throw new Error("Parquet parser exports are unavailable.");
+    const buffer=await file.arrayBuffer();
+    const asyncBuffer={byteLength:buffer.byteLength,slice:(start,end)=>buffer.slice(start,end)};
+    const metadata=await module.parquetMetadataAsync(asyncBuffer);
+    const schema=module.parquetSchema(metadata);
+    const columns=(schema.children||[]).map((child)=>child.element && child.element.name).filter(Boolean).slice(0,40);
+    const totalRows=Number(metadata.num_rows || 0);
+    const rows=await module.parquetReadObjects({file:asyncBuffer,columns:columns.length?columns:undefined,rowStart:0,rowEnd:Math.min(MAX_TABLE_ROWS,totalRows || MAX_TABLE_ROWS)});
+    return {rows:rows,fields:columns.length?columns:Array.from(new Set(rows.flatMap((row)=>Object.keys(row)))),metadata:metadata,schema:schema};
+  }
+  async function renderParquet(file) {
+    addHeading("Apache Parquet / GeoParquet viewer","Reads a bounded row sample in-browser using hyparquet. This supports inspection and small exports, not full-size analytical queries; some uncommon codecs may require an extra codec package.");
+    status("Reading Parquet footer and selected rows…");
+    const parsed=await parseParquetFile(file);
+    const meta=parsed.metadata;
+    const total=Number(meta.num_rows||0);
+    metaStrip([["ROWS",Number.isFinite(total)?total.toLocaleString():"unknown"],["COLUMNS",String(parsed.fields.length)],["SAMPLE ROWS",String(parsed.rows.length)]]);
+    addTable(parsed.rows.map((r)=>parsed.fields.map((f)=>r[f])),parsed.fields,"Row sample only. Full record count may be much larger; no rows beyond the preview limit are loaded.");
+    addPre(JSON.stringify(parsed.schema,null,2),"PARQUET SCHEMA");
+    currentPreview={type:"parquet",rows:parsed.rows,headers:parsed.fields,text:JSON.stringify(parsed.schema,null,2)};
+    $("#viewerCopy").disabled=false;
   }
   function fitsValue(view,bitpix,offset) {
     if(bitpix===8) return view.getUint8(offset);
@@ -463,6 +606,12 @@
         kind="tiff";setTargets(targetsFor(file,kind));await renderGeoTiff(file);
       } else if([".fits",".fit",".fts"].includes(ext)) {
         kind="fits";setTargets(targetsFor(file,kind));await renderFits(file);
+      } else if([".nc",".nc3",".netcdf"].includes(ext)) {
+        kind="netcdf";setTargets(targetsFor(file,kind));await renderNetCDF(file);
+      } else if([".h5",".hdf5",".nc4",".he5"].includes(ext)) {
+        kind="hdf5";setTargets(targetsFor(file,kind));await renderHDF5(file);
+      } else if(ext===".parquet") {
+        kind="parquet";setTargets(targetsFor(file,kind));await renderParquet(file);
       } else if([".csv",".tsv",".tab"].includes(ext)) {
         kind="table";setTargets(targetsFor(file,kind));await renderCsv(file,ext===".tsv"||ext===".tab"?"\t":"");
       } else if([".xlsx",".xlsm",".xlsb",".xls",".ods"].includes(ext)) {
@@ -535,6 +684,7 @@
       return window.jsyaml.load(await file.text(),{json:true});
     }
     if([".csv",".tsv",".tab"].includes(ext)) return parseTableFile(file);
+    if(ext===".parquet") return parseParquetFile(file);
     if([".xml",".gml",".kml",".gpx",".pvl"].includes(ext)) return xmlToObject(new DOMParser().parseFromString(await file.text(),"application/xml").documentElement);
     if([".xlsx",".xlsm",".xlsb",".xls",".ods"].includes(ext)) {
       await loadScript(LIB.sheet,()=>!!window.XLSX);
@@ -627,7 +777,8 @@
           const parsed=await parseFileValue(file);
           let rows,fields;
           if(parsed && parsed.rows && parsed.fields) {rows=parsed.rows;fields=parsed.fields;}
-          else {rows=asRecords(parsed);fields=Array.from(new Set(rows.flatMap((r)=>Object.keys(r))));}
+          else if(Array.isArray(parsed)) {rows=asRecords(parsed);fields=Array.from(new Set(rows.flatMap((r)=>Object.keys(r))));}
+          else {throw new Error("No tabular rows were available to export.");}
           await loadScript(LIB.papa,()=>!!window.Papa);
           output=window.Papa.unparse({fields:fields,data:rows.map((row)=>fields.map((f)=>row[f]) )},{delimiter:target==="tsv"?"\t":",",newline:"\r\n"});
           mime=target==="tsv"?"text/tab-separated-values;charset=utf-8":"text/csv;charset=utf-8";ext=target;

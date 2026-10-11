@@ -67,6 +67,7 @@
     netcdf: "https://cdn.jsdelivr.net/npm/netcdfjs@4.0.0/+esm",
     hdf5: "https://cdn.jsdelivr.net/npm/h5wasm@0.10.3/dist/esm/hdf5_hl.js",
     parquet: "https://cdn.jsdelivr.net/npm/hyparquet@1.31.3/src/index.min.js",
+    arrow: "https://cdn.jsdelivr.net/npm/apache-arrow@21.2.0/+esm",
     three: "https://esm.sh/three@0.180.0",
     stlLoader: "https://esm.sh/three@0.180.0/examples/jsm/loaders/STLLoader.js",
     objLoader: "https://esm.sh/three@0.180.0/examples/jsm/loaders/OBJLoader.js",
@@ -76,7 +77,9 @@
     objExporter: "https://esm.sh/three@0.180.0/examples/jsm/exporters/OBJExporter.js",
     occtJs: "https://cdn.jsdelivr.net/npm/occt-import-js@0.0.23/dist/occt-import-js.js",
     occtWasm: "https://cdn.jsdelivr.net/npm/occt-import-js@0.0.23/dist/occt-import-js.wasm",
-    shpJs: "https://unpkg.com/shpjs@4.0.4/dist/shp.js"
+    shpJs: "https://unpkg.com/shpjs@4.0.4/dist/shp.js",
+    sqlJs: "https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.13.0/sql-wasm.js",
+    sqlWasm: "https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.13.0/sql-wasm.wasm"
   };
   const modulePromises = {};
   async function importModule(url) {
@@ -92,7 +95,8 @@
     [LIB.geotiff]:"sha384-m5adk5PRgt3JjiYbYoG8oXxc3EgRFKc1aCBgKzyxqxnbYpdiAMlHkR0gVDp03Q/H",
     [LIB.modelViewer]:"sha384-sr9b4Ux0WhAUGclJ0ym0FSY2zSOMmNSn0bP/SA0e6bNCrpn/5W3QL8mm+LdlQMKw",
     [LIB.occtJs]:"sha384-Z8pO9JEhFZF+mvDKxMuLvPT85VP7nly8CqYjBatl0bMeW9OsaKCes4gEUPL4nihc",
-    [LIB.shpJs]:"sha384-SvGz+Dog2fS8fxYIE3uf8dViVamrK+czJkTku+kw1+N5jqZULpRyEpT1JqF0PaWh"
+    [LIB.shpJs]:"sha384-SvGz+Dog2fS8fxYIE3uf8dViVamrK+czJkTku+kw1+N5jqZULpRyEpT1JqF0PaWh",
+    [LIB.sqlJs]:"sha384-DJiKBv+LC78e5InEB+MvFIAH079ynMK/ERTtFUCpDzXhH1Bht7aVfpg3yOVsuYl9"
   };
   function clearStage() {
     if (typeof activeViewerCleanup === "function") { try { activeViewerCleanup(); } catch (_) {} activeViewerCleanup = null; }
@@ -202,7 +206,8 @@
     if (kind === "yaml") return [{value:"json",label:"YAML → JSON"}, {value:"yaml",label:"Normalize YAML"}].concat(common);
     if (kind === "xml") return [{value:"json",label:"XML → JSON (simple documents)"}, {value:"xml",label:"Normalize XML"}].concat(common);
     if (kind === "workbook") return [{value:"csv",label:"Selected sheet → CSV"}, {value:"tsv",label:"Selected sheet → TSV"}, {value:"json",label:"Selected sheet → JSON"}].concat(common);
-    if (kind === "parquet") return [{value:"csv",label:"Preview rows → CSV"}, {value:"tsv",label:"Preview rows → TSV"}, {value:"json",label:"Preview rows → JSON"}].concat(common);
+    if (kind === "parquet" || kind === "arrow") return [{value:"csv",label:"Preview rows → CSV"}, {value:"tsv",label:"Preview rows → TSV"}, {value:"json",label:"Preview rows → JSON"}, {value:"xlsx",label:"Preview rows → XLSX"}].concat(common);
+    if (kind === "sqlite") return [{value:"sql-csv",label:"Query results → CSV"}, {value:"sql-tsv",label:"Query results → TSV"}, {value:"sql-json",label:"Query results → JSON"}, {value:"sql-xlsx",label:"Query results → XLSX"}].concat(common);
     if (kind === "geojson") return [{value:"shape-geojson",label:"Export features → GeoJSON"}, {value:"json-pretty",label:"Pretty-print GeoJSON"}, {value:"json-min",label:"Minify GeoJSON"}, {value:"geojson-csv",label:"Feature properties + geometry → CSV"}].concat(common);
     if (kind === "mesh3d") return [{value:"mesh-stl",label:"3D model → STL mesh"}, {value:"mesh-obj",label:"3D model → OBJ mesh"}].concat(common);
     if (kind === "zip") return common;
@@ -518,6 +523,30 @@
     const rows=await module.parquetReadObjects({file:asyncBuffer,columns:columns.length?columns:undefined,rowStart:0,rowEnd:Math.min(MAX_TABLE_ROWS,totalRows || MAX_TABLE_ROWS)});
     return {rows:rows,fields:columns.length?columns:Array.from(new Set(rows.flatMap((row)=>Object.keys(row)))),metadata:metadata,schema:schema};
   }
+  async function parseArrowFile(file) {
+    if(file.size>MAX_CONVERT_BYTES)throw new Error("Arrow / Feather preview is limited to 100 MB in the browser.");
+    const module=await importModule(MODULES.arrow);
+    if(typeof module.tableFromIPC!=="function")throw new Error("Apache Arrow IPC reader did not expose tableFromIPC.");
+    const table=module.tableFromIPC(new Uint8Array(await file.arrayBuffer()));
+    const fields=(table.schema.fields||[]).map((field)=>field.name).slice(0,40);
+    const n=Math.min(MAX_TABLE_ROWS,Number(table.numRows||0));
+    const rows=[];
+    for(let i=0;i<n;i++){
+      const row={};
+      fields.forEach((field)=>{let value;try{value=table.getChild(field)?.get(i);}catch(_){value="";}row[field]=value===undefined?null:value;});
+      rows.push(row);
+    }
+    return {rows:rows,fields:fields,totalRows:Number(table.numRows||0),schema:table.schema};
+  }
+  async function renderArrow(file) {
+    addHeading("Apache Arrow / Feather viewer","Reads Arrow IPC files and Feather v2/IPC data through apache-arrow. The preview is bounded to 250 rows and 40 columns; this is not a full analytical query engine.");
+    const parsed=await parseArrowFile(file);
+    metaStrip([["TOTAL ROWS",Number(parsed.totalRows).toLocaleString()],["COLUMNS",String(parsed.fields.length)],["SAMPLE ROWS",String(parsed.rows.length)]]);
+    addTable(parsed.rows.map((row)=>parsed.fields.map((field)=>row[field])),parsed.fields,"Bounded row sample. Nested Arrow values are displayed as values, not flattened.");
+    addPre(JSON.stringify(parsed.schema,null,2),"ARROW SCHEMA");
+    currentPreview={type:"arrow",rows:parsed.rows,headers:parsed.fields,text:JSON.stringify(parsed.schema,null,2)};
+    $("#viewerCopy").disabled=false;
+  }
   async function renderParquet(file) {
     addHeading("Apache Parquet / GeoParquet viewer","Reads a bounded row sample in-browser using hyparquet. This supports inspection and small exports, not full-size analytical queries; some uncommon codecs may require an extra codec package.");
     status("Reading Parquet footer and selected rows…");
@@ -795,6 +824,56 @@
     stage().append(model);
     currentPreview={type:"model",url:url};
   }
+  async function renderSQLite(file) {
+    if(file.size>MAX_CONVERT_BYTES)throw new Error("SQLite preview is limited to 100 MB in the browser.");
+    await loadScript(LIB.sqlJs,()=>typeof window.initSqlJs==="function");
+    const SQL=await window.initSqlJs({locateFile:(name)=>name.endsWith(".wasm")?LIB.sqlWasm:name});
+    const db=new SQL.Database(new Uint8Array(await file.arrayBuffer()));
+    const tables=db.exec("SELECT name, type, sql FROM sqlite_master WHERE type IN ('table','view') AND name NOT LIKE 'sqlite_%' ORDER BY type, name")[0];
+    const items=tables?tables.values.map((r)=>({name:String(r[0]),type:String(r[1]),sql:String(r[2]||"")})):[];
+    addHeading("SQLite database & query viewer","The database is opened read-only in memory from the original bytes. Queries are restricted to a single read-only SELECT / WITH statement; the original database file is never modified.");
+    metaStrip([["OBJECTS",String(items.length)],["DATABASE SIZE",formatBytes(file.size)],["QUERY MODE","SELECT only"]]);
+    if(items.length)addTable(items.map((item)=>[item.name,item.type,item.sql]),["Object","Type","Definition"],"Tables and views detected in this database.");
+    const area=document.createElement("textarea");area.className="viewer-sql-input";area.id="viewerSqlQuery";area.rows=4;area.spellcheck=false;
+    const defaultTable=items.find((item)=>item.type==="table");
+    area.value=defaultTable?'SELECT * FROM "'+defaultTable.name.replace(/"/g,'""')+'" LIMIT 250;':"SELECT name, type FROM sqlite_master LIMIT 250;";
+    area.setAttribute("aria-label","Read-only SQLite query");
+    const run=document.createElement("button");run.type="button";run.className="btn primary small";run.textContent="Run read-only query";
+    const queryStatus=document.createElement("div");queryStatus.className="viewer-query-status";queryStatus.setAttribute("role","status");
+    const out=document.createElement("div");out.className="viewer-query-output";
+    const wrap=document.createElement("div");wrap.className="viewer-query-box";
+    const label=document.createElement("label");label.textContent="SQL query (SELECT / WITH only)";
+    wrap.append(label,area,run,queryStatus,out);stage().append(wrap);
+    const queryState={rows:[],fields:[],sql:area.value};
+    const execute=()=>{
+      const query=area.value.trim().replace(/;+\s*$/,"");
+      if(!/^(SELECT|WITH)\b/i.test(query)||query.includes(";")) {
+        queryStatus.textContent="Only one read-only SELECT or WITH query is allowed. Mutating statements and multiple statements are rejected.";
+        queryStatus.className="viewer-query-status error";return;
+      }
+      try {
+        const result=db.exec(query);
+        const first=result[0];
+        queryState.fields=first?first.columns:[];
+        queryState.rows=first?first.values.map((values)=>Object.fromEntries(queryState.fields.map((field,i)=>[field,values[i]]))):[];
+        queryState.sql=query;
+        out.replaceChildren();
+        if(first)addTable(queryState.rows.map((row)=>queryState.fields.map((field)=>row[field])),queryState.fields,"Query returned "+queryState.rows.length+" row(s). Results are capped only for display; SQL query itself executes in memory.");
+        else {const note=document.createElement("p");note.className="viewer-caption";note.textContent="The statement returned no row set.";out.append(note);}
+        queryStatus.textContent="Query completed: "+queryState.rows.length+" row(s), "+queryState.fields.length+" column(s).";
+        queryStatus.className="viewer-query-status success";
+        currentPreview={type:"sqlite",db:db,rows:queryState.rows,headers:queryState.fields,sql:queryState.sql,tables:items};
+        setTargets(targetsFor(file,"sqlite"));
+        $("#viewerCopy").disabled=!queryState.rows.length;
+      } catch(err) {queryStatus.textContent="SQLite error: "+err.message;queryStatus.className="viewer-query-status error";}
+    };
+    run.addEventListener("click",execute);
+    currentPreview={type:"sqlite",db:db,rows:[],headers:[],sql:area.value,tables:items};
+    setTargets(targetsFor(file,"sqlite"));
+    if(items.length)execute();
+    $("#viewerCopy").disabled=true;
+    activeViewerCleanup=()=>{try{db.close();}catch(_){}};
+  }
   async function renderFile(file) {
     if(!file) return;
     clearStage();activeFile=file;activeFormatRecord=null;
@@ -821,6 +900,10 @@
         kind="hdf5";setTargets(targetsFor(file,kind));await renderHDF5(file);
       } else if(ext===".parquet") {
         kind="parquet";setTargets(targetsFor(file,kind));await renderParquet(file);
+      } else if([".arrow",".feather",".arrows"].includes(ext)) {
+        kind="arrow";setTargets(targetsFor(file,kind));await renderArrow(file);
+      } else if([".sqlite",".sqlite3",".db"].includes(ext)) {
+        kind="sqlite";await renderSQLite(file);
       } else if([".csv",".tsv",".tab"].includes(ext)) {
         kind="table";setTargets(targetsFor(file,kind));await renderCsv(file,ext===".tsv"||ext===".tab"?"\t":"");
       } else if([".xlsx",".xlsm",".xlsb",".xls",".ods"].includes(ext)) {
@@ -900,6 +983,7 @@
     }
     if([".csv",".tsv",".tab"].includes(ext)) return parseTableFile(file);
     if(ext===".parquet") return parseParquetFile(file);
+    if([".arrow",".feather",".arrows"].includes(ext)) return parseArrowFile(file);
     if([".xml",".gml",".kml",".gpx",".pvl"].includes(ext)) return xmlToObject(new DOMParser().parseFromString(await file.text(),"application/xml").documentElement);
     if([".xlsx",".xlsm",".xlsb",".xls",".ods"].includes(ext)) {
       await loadScript(LIB.sheet,()=>!!window.XLSX);
@@ -989,6 +1073,25 @@
         const exported=target==="mesh-stl"?exporter.parse(currentPreview.object,{binary:true}):exporter.parse(currentPreview.object);
         blob=new Blob([exported],{type:target==="mesh-stl"?"model/stl":"text/plain;charset=utf-8"});
         name=file.name.replace(/\.[^.]+$/,"")+(target==="mesh-stl"?".stl":".obj");
+      } else if(["sql-csv","sql-tsv","sql-json","sql-xlsx"].includes(target)) {
+        const rows=currentPreview.type==="sqlite"?currentPreview.rows:[],fields=currentPreview.type==="sqlite"?currentPreview.headers:[];
+        if(!rows.length||!fields.length)throw new Error("Run a SELECT query that returns rows before exporting the SQLite query result.");
+        if(target==="sql-json") {
+          blob=new Blob([JSON.stringify(rows,null,2)],{type:"application/json;charset=utf-8"});
+          name=file.name.replace(/\.[^.]+$/,"")+"-query.json";
+        } else if(target==="sql-xlsx") {
+          await loadScript(LIB.sheet,()=>!!window.XLSX);
+          const wb=window.XLSX.utils.book_new(),sheet=window.XLSX.utils.json_to_sheet(rows,{header:fields});
+          window.XLSX.utils.book_append_sheet(wb,sheet,"Query");
+          blob=new Blob([window.XLSX.write(wb,{bookType:"xlsx",type:"array"})],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
+          name=file.name.replace(/\.[^.]+$/,"")+"-query.xlsx";
+        } else {
+          await loadScript(LIB.papa,()=>!!window.Papa);
+          const delimiter=target==="sql-tsv"?"\t":",";
+          const text=window.Papa.unparse({fields:fields,data:rows.map((row)=>fields.map((field)=>row[field]))},{delimiter:delimiter,newline:"\r\n"});
+          blob=new Blob([text],{type:target==="sql-tsv"?"text/tab-separated-values;charset=utf-8":"text/csv;charset=utf-8"});
+          name=file.name.replace(/\.[^.]+$/,"")+(target==="sql-tsv"?"-query.tsv":"-query.csv");
+        }
       } else if(target==="shape-geojson") {
         const data=currentPreview.value;
         if(!data || !["FeatureCollection","Feature"].includes(data.type))throw new Error("Load a GeoJSON file or a ZIP containing a shapefile first.");

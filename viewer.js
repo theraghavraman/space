@@ -218,7 +218,7 @@
     const common = [{value:"report-json",label:"Export file report → JSON"}, {value:"zip",label:"Create ZIP archive"}];
     if (kind === "image") return [{value:"png",label:"Image → PNG"}, {value:"jpeg",label:"Image → JPEG"}, {value:"webp",label:"Image → WebP"}].concat(common);
     if (kind === "tiff") return [{value:"png",label:"Rendered preview → PNG"}, {value:"jpeg",label:"Rendered preview → JPEG"}].concat(common);
-    if (kind === "fits") return [{value:"png",label:"Rendered preview → PNG"}, {value:"jpeg",label:"Rendered preview → JPEG"}].concat(currentPreview.fitsRows && currentPreview.fitsRows.length ? [{value:"fits-table-csv",label:"HDU table sample → CSV"},{value:"fits-table-json",label:"HDU table sample → JSON"},{value:"fits-table-xlsx",label:"HDU table sample → XLSX"}] : []).concat(common);
+    if (kind === "fits") return (currentPreview.canvas ? [{value:"png",label:"Rendered preview → PNG"}, {value:"jpeg",label:"Rendered preview → JPEG"}] : []).concat(currentPreview.fitsRows && currentPreview.fitsRows.length ? [{value:"fits-table-csv",label:"HDU table sample → CSV"},{value:"fits-table-json",label:"HDU table sample → JSON"},{value:"fits-table-xlsx",label:"HDU table sample → XLSX"}] : []).concat(common);
     if (kind === "pdf") return [{value:"pdf-png",label:"Current PDF page → PNG"}, {value:"pdf-jpeg",label:"Current PDF page → JPEG"}, {value:"pdf-text",label:"Extract PDF text → TXT"}].concat(common);
     if (kind === "table" || kind === "jsonl" || ext===".csv" || ext===".tsv" || ext===".tab" || ext===".jsonl" || ext===".ndjson") return [{value:"csv",label:"Export records → CSV"}, {value:"tsv",label:"Export records → TSV"}, {value:"json",label:"Records → JSON array"}, {value:"xlsx",label:"Records → XLSX workbook"}].concat(common);
     if (kind === "json") return [{value:"json-pretty",label:"Pretty-print JSON"}, {value:"json-min",label:"Minify JSON"}, {value:"csv",label:"JSON records → CSV"}, {value:"tsv",label:"JSON records → TSV"}, {value:"xlsx",label:"JSON records → XLSX"}, {value:"yaml",label:"JSON → YAML"}, {value:"xml",label:"JSON → XML"}].concat(common);
@@ -850,7 +850,7 @@
       }
     } catch(err) { addNotice("FITS table preview could not be read: "+err.message,"warn"); }
     if(end<0 || naxis<2 || !width || !height || ![8,16,32,-32,-64].includes(bitpix)) {
-      addNotice("This FITS file has no supported primary 2-D image plane. Header inspection works; table, cube and compressed-image visualization needs a specialized FITS reader.","warn");
+      addNotice("This FITS file has no supported primary 2-D image plane. A recognized table extension is shown above when available; cubes, compressed images and full scientific validation still need a specialized workflow.","warn");
       currentPreview={type:"fits",text:details,hdus:fitsInspection.hdus,fitsRows:fitsTableSample&&fitsTableSample.rows,fitsFields:fitsTableSample&&fitsTableSample.fields,fitsTableHdu:fitsTableSample&&fitsTableSample.name};$("#viewerCopy").disabled=false;return;
     }
     const dataOffset=Math.ceil(end/2880)*2880;

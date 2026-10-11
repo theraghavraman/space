@@ -32,7 +32,7 @@
     const m = name.match(/(\.[a-z0-9][a-z0-9._-]*)$/);
     if (!m) return "";
     const ext = m[1];
-    const known = [".nii.gz",".fits.gz",".tar.gz",".nc4",".hdf5",".geojson",".shp.xml",".votable.xml",".fits.fz",".fits"," .jpeg".trim(),".tiff",".jp2",".jpeg2000",".glb",".gltf",".parquet",".feather",".arrow",".sqlite",".gpkg",".grib2",".grb2",".grib",".grb",".tsv",".csv",".json",".xml",".yaml",".yml",".pdf",".xlsx",".xlsm",".xlsb",".xlsx",".xls",".ods",".zip",".gz",".las",".laz",".e57",".png",".jpg",".webp",".gif",".bmp",".avif",".svg",".mp4",".mov",".webm",".mkv",".mp3",".wav",".ogg",".flac",".fits",".nc",".cdf",".h5",".hdf",".fits",".bsp",".spk",".ck",".pck",".dsk",".vot",".kml",".kmz",".gpx",".pcap",".log",".txt",".md",".yaml",".yml",".stl",".obj",".3mf",".step",".stp",".iges",".vtk",".vtp",".pds",".lbl",".img",".bin",".dat",".ipynb",".py",".sql"];
+    const known = [".nii.gz",".fits.gz",".tar.gz",".nc4",".hdf5",".geojson",".shp.xml",".votable.xml",".jsonl",".ndjson",".fits.fz",".fits"," .jpeg".trim(),".tiff",".jp2",".jpeg2000",".glb",".gltf",".parquet",".feather",".arrow",".sqlite",".gpkg",".grib2",".grb2",".grib",".grb",".tsv",".csv",".json",".xml",".yaml",".yml",".pdf",".xlsx",".xlsm",".xlsb",".xlsx",".xls",".ods",".zip",".gz",".las",".laz",".e57",".png",".jpg",".webp",".gif",".bmp",".avif",".svg",".mp4",".mov",".webm",".mkv",".mp3",".wav",".ogg",".flac",".fits",".nc",".cdf",".h5",".hdf",".fits",".bsp",".spk",".ck",".pck",".dsk",".vot",".kml",".kmz",".gpx",".pcap",".log",".txt",".md",".yaml",".yml",".stl",".obj",".3mf",".step",".stp",".iges",".vtk",".vtp",".pds",".lbl",".img",".bin",".dat",".ipynb",".py",".sql"];
     known.sort((a,b)=>b.length-a.length);
     return known.find((e)=>name.endsWith(e)) || ext;
   }
@@ -307,26 +307,30 @@
   async function parseJsonLinesFile(file, maxRows=MAX_NDJSON_ROWS) {
     if(file.size>MAX_CONVERT_BYTES)throw new Error("JSON Lines preview/conversion is limited to 100 MB in the browser.");
     const text=await file.text();
-    const lines=text.split(/\r?\n/);
     const rows=[],errors=[];
-    let total=0;
-    for(let i=0;i<lines.length;i++){
-      const line=lines[i].trim();if(!line)continue;
+    let offset=0,total=0,lineNo=0,truncated=false;
+    while(offset<text.length){
+      const newline=text.indexOf("\n",offset);
+      const end=newline<0?text.length:newline;
+      const line=text.slice(offset,end).trim();
+      offset=newline<0?text.length:newline+1;
+      lineNo++;
+      if(!line)continue;
+      if(rows.length>=maxRows){truncated=true;break;}
       total++;
-      if(rows.length>=maxRows)continue;
       try {
         const value=JSON.parse(line);
         if(value && typeof value==="object" && !Array.isArray(value))rows.push(value);
         else rows.push({value:value});
-      } catch(err) {if(errors.length<20)errors.push("Line "+(i+1)+": "+err.message);}
+      } catch(err) {if(errors.length<20)errors.push("Line "+lineNo+": "+err.message);}
     }
     const fields=Array.from(new Set(rows.flatMap((row)=>Object.keys(row))));
-    return {rows:rows,fields:fields,totalRows:total,truncated:total>maxRows,errors:errors};
+    return {rows:rows,fields:fields,totalRows:total,truncated:truncated,errors:errors};
   }
   async function renderJsonLines(file) {
     addHeading("JSON Lines / NDJSON viewer","Each non-empty line is parsed as a separate JSON record. Preview is capped at 250 records; exports are capped at 100,000 records / 100 MB.");
     const parsed=await parseJsonLinesFile(file,MAX_TABLE_ROWS);
-    metaStrip([["RECORDS",parsed.totalRows.toLocaleString()],["COLUMNS",String(parsed.fields.length)],["PREVIEW",String(parsed.rows.length)]]);
+    metaStrip([["RECORDS",parsed.truncated?"≥ "+parsed.totalRows.toLocaleString():parsed.totalRows.toLocaleString()],["COLUMNS",String(parsed.fields.length)],["PREVIEW",String(parsed.rows.length)]]);
     if(parsed.rows.length)addTable(parsed.rows.map((row)=>parsed.fields.map((field)=>row[field])),parsed.fields,"First "+parsed.rows.length+" record(s). JSON lines are parsed independently.");
     else addNotice("No valid JSON records were found.","warn");
     if(parsed.errors.length)addNotice(parsed.errors.join("\n"),"warn");
@@ -951,7 +955,7 @@
         kind="json";setTargets(targetsFor(file,kind));await renderJson(file);
       } else if([".yaml",".yml"].includes(ext)) {
         kind="yaml";setTargets(targetsFor(file,kind));await renderYaml(file);
-      } else if([".xml",".gml",".kml",".gpx",".lbl.xml",".votable.xml",".pvl"].includes(ext)) {
+      } else if([".xml",".gml",".kml",".gpx",".lbl.xml",".votable.xml",".vot",".pvl"].includes(ext)) {
         kind="xml";setTargets(targetsFor(file,kind));await renderXml(file);
       } else if([".zip",".kmz"].includes(ext) || ext===".gz" || /\.gz$/i.test(file.name)) {
         kind=ext===".gz"?"gzip":"zip";await renderArchive(file);

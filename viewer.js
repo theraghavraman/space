@@ -209,10 +209,30 @@
     const registry=await formatRegistryPromise;
     const name=(file && file.name || "").toLowerCase();
     const extension=extOf(file).toLowerCase();
-    return registry.find((record)=>(record.extensions||[]).some((value)=>{
+    const matches=registry.filter((record)=>(record.extensions||[]).some((value)=>{
       const token=String(value||"").toLowerCase().trim();
       return token.startsWith(".") && (extension===token || name.endsWith(token));
-    })) || null;
+    }));
+    if(!matches.length)return null;
+    const preferred={
+      ".json":(n)=>n.includes("xml / json / yaml"),
+      ".geojson":(n)=>n.includes("geojson"),
+      ".csv":(n)=>n.includes("csv / tsv / plain text"),
+      ".tsv":(n)=>n.includes("csv / tsv / plain text"),
+      ".txt":(n)=>n.includes("csv / tsv / plain text"),
+      ".nc":(n)=>n.includes("netcdf / netcdf-4"),
+      ".nc4":(n)=>n.includes("netcdf / netcdf-4"),
+      ".hdf":(n)=>n.startsWith("hdf4 / hdf5"),
+      ".h5":(n)=>n.startsWith("hdf4 / hdf5"),
+      ".hdf5":(n)=>n.startsWith("hdf4 / hdf5"),
+      ".xml":(n)=>n.includes("xml / json / yaml"),
+      ".fits":(n)=>n.includes("fits"),
+      ".fit":(n)=>n.includes("fits"),
+      ".fts":(n)=>n.includes("fits"),
+      ".pdf":(n)=>n.includes("documentation, reports")
+    };
+    const prefer=preferred[extension];
+    return (prefer && matches.find((record)=>prefer(safeText(record.name).toLowerCase()))) || matches.find((record)=>(record.extensions||[]).some((e)=>String(e).toLowerCase()===extension)) || matches[0];
   }
   function renderRegistryContext(record) {
     if(!record)return;
@@ -622,7 +642,7 @@
     });
     stage().append(list);
     currentPreview={type:"zip",entries:entries};
-    setTargets([{value:"zip",label:"Create ZIP of original archive (nested)"}]);
+    setTargets([{value:"report-json",label:"Export archive inventory → JSON"},{value:"zip",label:"Create ZIP of original archive (nested)"}]);
   }
   async function renderGeoJSON(file) {
     const text=await file.slice(0,MAX_TEXT_BYTES).text();
@@ -732,7 +752,7 @@
     clearStage();activeFile=file;activeFormatRecord=null;
     activeFormatRecord=await findFormatRecord(file);
     noteFile(file,activeFormatRecord ? activeFormatRecord.name : "Detecting format…");
-    setTargets([{value:"zip",label:"Create ZIP archive"}]);
+    setTargets([{value:"report-json",label:"Export file report → JSON"},{value:"zip",label:"Create ZIP archive"}]);
     $("#viewerSheet").classList.add("hidden");$("#viewerSheet").replaceChildren();
     status("Reading "+file.name+" locally. No upload is performed.");
     const ext=extOf(file);
@@ -769,11 +789,11 @@
         kind=ext===".gz"?"gzip":"zip";await renderArchive(file);
       } else if([".mp3",".wav",".ogg",".flac",".m4a",".aac"].includes(ext) || (file.type&&file.type.startsWith("audio/"))) {
         kind="audio";addHeading("Audio player","Playback depends on the codecs supported by this browser.");
-        const audio=document.createElement("audio");audio.controls=true;audio.src=newObjectUrl(file);audio.className="viewer-media";stage().append(audio);
+        const audio=document.createElement("audio");audio.controls=true;audio.src=newObjectUrl(file);audio.className="viewer-media";stage().append(audio);currentPreview={type:"audio"};
         metaStrip([["FILE",file.name],["SIZE",formatBytes(file.size)],["PLAYBACK","Native browser audio"]]);setTargets([{value:"zip",label:"Create ZIP archive"}]);
       } else if([".mp4",".mov",".webm",".mkv",".avi",".m4v"].includes(ext) || (file.type&&file.type.startsWith("video/"))) {
         kind="video";addHeading("Video player","Only codecs supported by this browser can play. The file is not transcoded in-place.");
-        const video=document.createElement("video");video.controls=true;video.preload="metadata";video.src=newObjectUrl(file);video.className="viewer-media";stage().append(video);
+        const video=document.createElement("video");video.controls=true;video.preload="metadata";video.src=newObjectUrl(file);video.className="viewer-media";stage().append(video);currentPreview={type:"video"};
         metaStrip([["FILE",file.name],["SIZE",formatBytes(file.size)],["PLAYBACK","Native browser video"]]);setTargets([{value:"zip",label:"Create ZIP archive"}]);
       } else if([".stl",".obj",".ply"].includes(ext)) {
         kind="mesh3d";setTargets(targetsFor(file,kind));await renderMesh3D(file,ext);
@@ -785,7 +805,7 @@
         addPre(text,"TEXT SOURCE"+(file.size>MAX_TEXT_BYTES?" · FIRST 32 MB ONLY":""));
         if(file.size>MAX_TEXT_BYTES)addNotice("Text preview truncated at 32 MB. Large scientific text products are better inspected with a local streaming tool.","warn");
         currentPreview={type:"text",text:text};$("#viewerCopy").disabled=false;
-        setTargets([{value:"text",label:"Save as UTF-8 text"}].concat([{value:"zip",label:"Create ZIP archive"}]));
+        setTargets([{value:"text",label:"Save as UTF-8 text"},{value:"report-json",label:"Export file report → JSON"},{value:"zip",label:"Create ZIP archive"}]);
       } else {
         kind="binary";addHeading("Binary / scientific-format viewer","No generic parser can safely interpret every mission-specific binary layout. This view shows the signature and a byte-level window; the format atlas links the official reader / validator.");
         const bytes=await readHead(file,512);

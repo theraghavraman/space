@@ -313,5 +313,14 @@
     "repository": "https://github.com/manzt/zarrita.js",
     "license": "MIT",
     "run": "const array = await zarr.open(zarr.root(store).resolve('/array'), { kind: 'array' }); const sample = await zarr.get(array, [zarr.slice(0, 30), zarr.slice(0, 40)])"
+  },
+  {
+    "name": "Three.js VTKLoader",
+    "category": "Scientific visualization",
+    "summary": "Open-source legacy VTK dataset loader for browser rendering as a 3D mesh. SPACE routes .vtk files through a WebGL viewer; legacy VTK variants outside the loader's supported datasets, XML VTK (.vtp/.vtu), and scientific array interpretation may need vtk.js or ParaView.",
+    "source": "https://threejs.org/docs/#examples/en/loaders/VTKLoader",
+    "repository": "https://github.com/mrdoob/three.js",
+    "license": "MIT",
+    "run": "new VTKLoader().parse(await file.arrayBuffer())"
   }
 ]

@@ -337,6 +337,15 @@
     await renderPage(1);
     $("#viewerCopy").disabled=true;
   }
+  async function isHDF5File(file) {
+    const bytes=await readHead(file,4096);
+    const sig=[0x89,0x48,0x44,0x46,0x0d,0x0a,0x1a,0x0a];
+    for(let offset=0;offset+8<=bytes.length;offset=(offset===0?512:offset*2)){
+      let ok=true;for(let i=0;i<8;i++)if(bytes[offset+i]!==sig[i]){ok=false;break;}
+      if(ok)return true;
+    }
+    return false;
+  }
   async function renderNetCDF(file) {
     if (file.size > MAX_CONVERT_BYTES) throw new Error("NetCDF preview is limited to 100 MB in the browser.");
     const module = await importModule(MODULES.netcdf);
@@ -594,22 +603,21 @@
     const data=JSON.parse(text);
     const features=data.type==="FeatureCollection" ? (data.features||[]) : data.type==="Feature" ? [data] : [];
     const pairs=[];
-    const collect=(c)=>{if(Array.isArray(c)&&c.length>=2&&typeof c[0]==="number"&&typeof c[1]==="number"){pairs.push([c[0],c[1]]);return;}if(Array.isArray(c))c.forEach(collect);};
+    const collect=(c)=>{if(Array.isArray(c)&&c.length>=2&&typeof c[0]==="number"&&typeof c[1]==="number"){if(pairs.length<25000)pairs.push([c[0],c[1]]);return;}if(Array.isArray(c))c.forEach(collect);};
     features.forEach((feature)=>collect(feature.geometry&&feature.geometry.coordinates));
     addHeading("GeoJSON feature viewer","Local longitude/latitude extent sketch for inspection. Not a map projection, geodesic rendering or GIS topology validator.");
     const geometryCounts={};
     features.forEach((f)=>{const type=f.geometry&&f.geometry.type||"No geometry";geometryCounts[type]=(geometryCounts[type]||0)+1;});
     metaStrip([["FEATURES",String(features.length)],["COORDINATES",String(pairs.length)],["GEOMETRIES",Object.keys(geometryCounts).length ? Object.keys(geometryCounts).join(", ") : "none"]]);
     if(pairs.length){
-      const xs=pairs.map((p)=>p[0]),ys=pairs.map((p)=>p[1]);
-      const minX=Math.min(...xs),maxX=Math.max(...xs),minY=Math.min(...ys),maxY=Math.max(...ys),dx=maxX-minX||1,dy=maxY-minY||1;
+      const minX=pairs.reduce((m,p)=>Math.min(m,p[0]),Infinity),maxX=pairs.reduce((m,p)=>Math.max(m,p[0]),-Infinity),minY=pairs.reduce((m,p)=>Math.min(m,p[1]),Infinity),maxY=pairs.reduce((m,p)=>Math.max(m,p[1]),-Infinity),dx=maxX-minX||1,dy=maxY-minY||1;
       const svgNS="http://www.w3.org/2000/svg";
       const svg=document.createElementNS(svgNS,"svg");svg.setAttribute("viewBox","0 0 800 420");svg.setAttribute("role","img");svg.setAttribute("aria-label","GeoJSON coordinate extent preview");svg.classList.add("viewer-geojson-map");
       const bg=document.createElementNS(svgNS,"rect");bg.setAttribute("x","0");bg.setAttribute("y","0");bg.setAttribute("width","800");bg.setAttribute("height","420");bg.setAttribute("rx","12");bg.setAttribute("fill","#f0f7f8");svg.append(bg);
       for(let x=60;x<800;x+=70){const line=document.createElementNS(svgNS,"path");line.setAttribute("d","M"+x+" 0 V420");line.setAttribute("stroke","#dce7ea");line.setAttribute("stroke-width","1");svg.append(line);}
       for(let y=50;y<420;y+=60){const line=document.createElementNS(svgNS,"path");line.setAttribute("d","M0 "+y+" H800");line.setAttribute("stroke","#dce7ea");line.setAttribute("stroke-width","1");svg.append(line);}
       const xy=(point)=>[24+(point[0]-minX)/dx*752,396-(point[1]-minY)/dy*372];
-      const pointsFrom=(coords)=>{const out=[];const walk=(c)=>{if(Array.isArray(c)&&c.length>=2&&typeof c[0]==="number"&&typeof c[1]==="number"){out.push(c);return;}if(Array.isArray(c))c.forEach(walk);};walk(coords);return out;};
+      const pointsFrom=(coords)=>{const out=[];const walk=(c)=>{if(out.length>=25000)return;if(Array.isArray(c)&&c.length>=2&&typeof c[0]==="number"&&typeof c[1]==="number"){out.push(c);return;}if(Array.isArray(c))c.forEach(walk);};walk(coords);return out;};
       const pathD=(coords,close)=>{const p=pointsFrom(coords);if(!p.length)return "";return p.map((point,i)=>{const q=xy(point);return (i?"L":"M")+q[0].toFixed(2)+" "+q[1].toFixed(2);}).join(" ")+(close?" Z":"");};
       const addPath=(d,fill,stroke)=>{if(!d)return;const el=document.createElementNS(svgNS,"path");el.setAttribute("d",d);el.setAttribute("fill",fill||"none");el.setAttribute("stroke",stroke||"#087f9d");el.setAttribute("stroke-width","1.7");el.setAttribute("stroke-linejoin","round");el.setAttribute("stroke-linecap","round");el.setAttribute("fill-rule","evenodd");svg.append(el);};
       const renderGeom=(geom)=>{
@@ -627,6 +635,7 @@
       const frame=document.createElement("div");frame.className="viewer-image-frame";frame.append(svg);stage().append(frame);
       metaStrip([["LONGITUDE",minX.toFixed(5)+" … "+maxX.toFixed(5)],["LATITUDE",minY.toFixed(5)+" … "+maxY.toFixed(5)],["DRAWN FEATURES",String(Math.min(features.length,250))]]);
     } else addNotice("No coordinate pairs were found. Displaying the document structure below.","warn");
+    if(pairs.length>=25000)addNotice("Spatial display is sampled to the first 25,000 coordinate pairs and first 250 features for responsiveness. The original GeoJSON is unchanged.","warn");
     const propertyRows=features.slice(0,100).map((f,i)=>[i+1,f.geometry&&f.geometry.type||"",JSON.stringify(f.properties||{})]);
     if(propertyRows.length)addTable(propertyRows,["#","Geometry","Properties"],"First 100 features.");
     addPre(JSON.stringify(data,null,2).slice(0,200000),"GEOJSON STRUCTURE");
@@ -710,8 +719,9 @@
       } else if([".fits",".fit",".fts"].includes(ext)) {
         kind="fits";setTargets(targetsFor(file,kind));await renderFits(file);
       } else if([".nc",".nc3",".netcdf"].includes(ext)) {
-        kind="netcdf";setTargets(targetsFor(file,kind));await renderNetCDF(file);
-      } else if([".h5",".hdf5",".nc4",".he5"].includes(ext)) {
+        if(await isHDF5File(file)){kind="hdf5";setTargets(targetsFor(file,kind));await renderHDF5(file);}
+        else {kind="netcdf";setTargets(targetsFor(file,kind));await renderNetCDF(file);}
+      } else if([".h5",".hdf5",".nc4",".he5"].includes(ext) || (ext===".hdf" && await isHDF5File(file))) {
         kind="hdf5";setTargets(targetsFor(file,kind));await renderHDF5(file);
       } else if(ext===".parquet") {
         kind="parquet";setTargets(targetsFor(file,kind));await renderParquet(file);

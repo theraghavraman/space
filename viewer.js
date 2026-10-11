@@ -912,7 +912,7 @@
       }
       const headers=parsed.headers,dataLength=fitsHduDataLength(headers);
       const xtension=safeText(headers.XTENSION||"PRIMARY").toUpperCase();
-      const record={index:index,headers:headers,headerCards:parsed.headerCards,headerStart:parsed.headerStart,dataOffset:parsed.dataOffset,dataLength:dataLength,xtension:xtension};
+      const record={index:index,headers:headers,headerCards:parsed.headerCards,headerStart:parsed.headerStart,headerEnd:parsed.headerEnd,headerBytes:parsed.headerBytes,dataOffset:parsed.dataOffset,dataLength:dataLength,xtension:xtension};
       hdus.push(record);
       if(dataLength==null)break;
       const nextOffset=parsed.dataOffset+Math.ceil(dataLength/2880)*2880;

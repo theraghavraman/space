@@ -454,11 +454,15 @@
     const features = data.features || [];
     return features.map(item=>{
       const assets=Object.values(item.assets || {});
-      const asset=assets.find(a=>a.href && !/thumbnail|overview|preview/i.test(a.title || a.roles?.join(" ") || ""));
+      const asset=assets.find(a=>{
+        const href=a.alternate?.https?.href || a.href || "";
+        return /^https?:\/\//i.test(href) && !/thumbnail|overview|preview/i.test(a.title || a.roles?.join(" ") || "");
+      });
+      const assetUrl=asset?.alternate?.https?.href || (asset?.href && /^https?:\/\//i.test(asset.href) ? asset.href : undefined);
       const link=item.links?.find(l=>l.rel==="self")?.href || item.links?.find(l=>l.rel==="alternate")?.href;
       return {title:item.properties?.title || item.id,id:item.id,collection:item.collection,
         datetime:item.properties?.datetime || item.properties?.start_datetime,summary:item.properties?.platform || item.properties?.instruments?.join(", ") || "",
-        portalUrl:link || base+"/collections/"+encodeURIComponent(item.collection),assetUrl:asset?.href,docUrl:"https://documentation.dataspace.copernicus.eu/APIs/STAC.html"};
+        portalUrl:link || base+"/collections/"+encodeURIComponent(item.collection),assetUrl,assetLabel:asset?.title || "HTTPS asset",docUrl:"https://documentation.dataspace.copernicus.eu/APIs/STAC.html"};
     });
   }
   async function searchEumetsat(query, limit) {

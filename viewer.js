@@ -1217,7 +1217,11 @@
       const parsed=loader.parse(await file.arrayBuffer());
       object=parsed.scene||parsed;
     } else {
-      const geometry=loader.parse(await file.arrayBuffer());
+      let sourceBuffer=await file.arrayBuffer();
+      if(extension===".vtk" && sourceBuffer.byteLength<256) {
+        const padded=new Uint8Array(256);padded.fill(32);padded.set(new Uint8Array(sourceBuffer),0);sourceBuffer=padded.buffer;
+      }
+      const geometry=loader.parse(sourceBuffer);
       if(!geometry.attributes.normal)geometry.computeVertexNormals();
       const hasColor=!!geometry.attributes.color;
       const material=new THREE.MeshStandardMaterial({color:hasColor?0xffffff:0x238ca5,vertexColors:hasColor,metalness:.13,roughness:.48,side:THREE.DoubleSide});

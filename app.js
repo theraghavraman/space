@@ -548,8 +548,9 @@
       const button=event.target.closest("[data-extension]");
       if(!button)return;
       const ext=button.dataset.extension||"";
-      $("#localFile").click();
-      $("#inspectionFilename").textContent="Choose a file matching "+ext;
+      $("#viewerExtensionHint").textContent=ext?"Suggested type: "+ext+" — choose a matching local file to open it.":"Choose a local file to open.";
+      $("#viewer").scrollIntoView({behavior:"smooth",block:"start"});
+      $("#viewerFile").click();
     });
     $("#runSearch").addEventListener("click",runCatalogueSearch);
     $("#openPortal").addEventListener("click",portalForSource);

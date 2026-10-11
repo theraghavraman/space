@@ -304,5 +304,14 @@
     "repository": "https://github.com/SheetJS/bz2",
     "license": "MIT",
     "run": "bz2.decompress(new Uint8Array(arrayBuffer), true)"
+  },
+  {
+    "name": "zarrita.js",
+    "category": "Chunked scientific arrays",
+    "summary": "MIT-licensed browser-capable reader for Zarr v2/v3 arrays and groups. SPACE previews bounded samples from zipped Zarr stores, with sample-only CSV/JSON/XLSX exports. Compressed chunks may require codecs beyond those registered by the installed library.",
+    "source": "https://github.com/manzt/zarrita.js",
+    "repository": "https://github.com/manzt/zarrita.js",
+    "license": "MIT",
+    "run": "const array = await zarr.open(zarr.root(store).resolve('/array'), { kind: 'array' }); const sample = await zarr.get(array, [zarr.slice(0, 30), zarr.slice(0, 40)])"
   }
 ]

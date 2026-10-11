@@ -15,7 +15,7 @@
   const MAX_CONVERT_BYTES = 100 * 1024 * 1024;
   const MAX_TABLE_ROWS = 250;
   const libs = {};
-  let activeFile = null, currentPreview = {}, activeUrl = "", activeArchive = null, activeGzipBytes = null;
+  let activeFile = null, currentPreview = {}, activeUrl = "", activeArchive = null, activeGzipBytes = null, activeViewerCleanup = null;
 
   const stage = () => $("#viewerStage");
   function status(message, type) {
@@ -65,7 +65,14 @@
   const MODULES = {
     netcdf: "https://cdn.jsdelivr.net/npm/netcdfjs@4.0.0/+esm",
     hdf5: "https://cdn.jsdelivr.net/npm/h5wasm@0.10.3/dist/esm/hdf5_hl.js",
-    parquet: "https://cdn.jsdelivr.net/npm/hyparquet@1.31.3/src/index.min.js"
+    parquet: "https://cdn.jsdelivr.net/npm/hyparquet@1.31.3/src/index.min.js",
+    three: "https://esm.sh/three@0.180.0",
+    stlLoader: "https://esm.sh/three@0.180.0/examples/jsm/loaders/STLLoader.js",
+    objLoader: "https://esm.sh/three@0.180.0/examples/jsm/loaders/OBJLoader.js",
+    plyLoader: "https://esm.sh/three@0.180.0/examples/jsm/loaders/PLYLoader.js",
+    orbitControls: "https://esm.sh/three@0.180.0/examples/jsm/controls/OrbitControls.js",
+    stlExporter: "https://esm.sh/three@0.180.0/examples/jsm/exporters/STLExporter.js",
+    objExporter: "https://esm.sh/three@0.180.0/examples/jsm/exporters/OBJExporter.js"
   };
   const modulePromises = {};
   async function importModule(url) {
@@ -82,6 +89,7 @@
     [LIB.modelViewer]:"sha384-sr9b4Ux0WhAUGclJ0ym0FSY2zSOMmNSn0bP/SA0e6bNCrpn/5W3QL8mm+LdlQMKw"
   };
   function clearStage() {
+    if (typeof activeViewerCleanup === "function") { try { activeViewerCleanup(); } catch (_) {} activeViewerCleanup = null; }
     if (activeUrl) URL.revokeObjectURL(activeUrl);
     activeUrl = "";
     stage().replaceChildren();
@@ -189,6 +197,8 @@
     if (kind === "xml") return [{value:"json",label:"XML → JSON (simple documents)"}, {value:"xml",label:"Normalize XML"}].concat(common);
     if (kind === "workbook") return [{value:"csv",label:"Selected sheet → CSV"}, {value:"tsv",label:"Selected sheet → TSV"}, {value:"json",label:"Selected sheet → JSON"}].concat(common);
     if (kind === "parquet") return [{value:"csv",label:"Preview rows → CSV"}, {value:"tsv",label:"Preview rows → TSV"}, {value:"json",label:"Preview rows → JSON"}].concat(common);
+    if (kind === "geojson") return [{value:"json-pretty",label:"Pretty-print GeoJSON"}, {value:"json-min",label:"Minify GeoJSON"}, {value:"geojson-csv",label:"Feature properties + geometry → CSV"}].concat(common);
+    if (kind === "mesh3d") return [{value:"mesh-stl",label:"3D model → STL mesh"}, {value:"mesh-obj",label:"3D model → OBJ mesh"}].concat(common);
     if (kind === "zip") return common;
     if (kind === "gzip") return [{value:"decompress",label:"Decompress GZIP"}].concat(common);
     return common;
@@ -578,6 +588,99 @@
     currentPreview={type:"zip",entries:entries};
     setTargets([{value:"zip",label:"Create ZIP of original archive (nested)"}]);
   }
+  async function renderGeoJSON(file) {
+    const text=await file.slice(0,MAX_TEXT_BYTES).text();
+    if(file.size>MAX_TEXT_BYTES) throw new Error("GeoJSON preview is limited to 32 MB in this browser.");
+    const data=JSON.parse(text);
+    const features=data.type==="FeatureCollection" ? (data.features||[]) : data.type==="Feature" ? [data] : [];
+    const pairs=[];
+    const collect=(c)=>{if(Array.isArray(c)&&c.length>=2&&typeof c[0]==="number"&&typeof c[1]==="number"){pairs.push([c[0],c[1]]);return;}if(Array.isArray(c))c.forEach(collect);};
+    features.forEach((feature)=>collect(feature.geometry&&feature.geometry.coordinates));
+    addHeading("GeoJSON feature viewer","Local longitude/latitude extent sketch for inspection. Not a map projection, geodesic rendering or GIS topology validator.");
+    const geometryCounts={};
+    features.forEach((f)=>{const type=f.geometry&&f.geometry.type||"No geometry";geometryCounts[type]=(geometryCounts[type]||0)+1;});
+    metaStrip([["FEATURES",String(features.length)],["COORDINATES",String(pairs.length)],["GEOMETRIES",Object.keys(geometryCounts).length ? Object.keys(geometryCounts).join(", ") : "none"]]);
+    if(pairs.length){
+      const xs=pairs.map((p)=>p[0]),ys=pairs.map((p)=>p[1]);
+      const minX=Math.min(...xs),maxX=Math.max(...xs),minY=Math.min(...ys),maxY=Math.max(...ys),dx=maxX-minX||1,dy=maxY-minY||1;
+      const svgNS="http://www.w3.org/2000/svg";
+      const svg=document.createElementNS(svgNS,"svg");svg.setAttribute("viewBox","0 0 800 420");svg.setAttribute("role","img");svg.setAttribute("aria-label","GeoJSON coordinate extent preview");svg.classList.add("viewer-geojson-map");
+      const bg=document.createElementNS(svgNS,"rect");bg.setAttribute("x","0");bg.setAttribute("y","0");bg.setAttribute("width","800");bg.setAttribute("height","420");bg.setAttribute("rx","12");bg.setAttribute("fill","#f0f7f8");svg.append(bg);
+      for(let x=60;x<800;x+=70){const line=document.createElementNS(svgNS,"path");line.setAttribute("d","M"+x+" 0 V420");line.setAttribute("stroke","#dce7ea");line.setAttribute("stroke-width","1");svg.append(line);}
+      for(let y=50;y<420;y+=60){const line=document.createElementNS(svgNS,"path");line.setAttribute("d","M0 "+y+" H800");line.setAttribute("stroke","#dce7ea");line.setAttribute("stroke-width","1");svg.append(line);}
+      const xy=(point)=>[24+(point[0]-minX)/dx*752,396-(point[1]-minY)/dy*372];
+      const pointsFrom=(coords)=>{const out=[];const walk=(c)=>{if(Array.isArray(c)&&c.length>=2&&typeof c[0]==="number"&&typeof c[1]==="number"){out.push(c);return;}if(Array.isArray(c))c.forEach(walk);};walk(coords);return out;};
+      const pathD=(coords,close)=>{const p=pointsFrom(coords);if(!p.length)return "";return p.map((point,i)=>{const q=xy(point);return (i?"L":"M")+q[0].toFixed(2)+" "+q[1].toFixed(2);}).join(" ")+(close?" Z":"");};
+      const addPath=(d,fill,stroke)=>{if(!d)return;const el=document.createElementNS(svgNS,"path");el.setAttribute("d",d);el.setAttribute("fill",fill||"none");el.setAttribute("stroke",stroke||"#087f9d");el.setAttribute("stroke-width","1.7");el.setAttribute("stroke-linejoin","round");el.setAttribute("stroke-linecap","round");el.setAttribute("fill-rule","evenodd");svg.append(el);};
+      const renderGeom=(geom)=>{
+        if(!geom)return;
+        const c=geom.coordinates;
+        if(geom.type==="Point"){const q=xy(c);const el=document.createElementNS(svgNS,"circle");el.setAttribute("cx",q[0]);el.setAttribute("cy",q[1]);el.setAttribute("r","4");el.setAttribute("fill","#087f9d");el.setAttribute("stroke","#ffffff");el.setAttribute("stroke-width","1.5");svg.append(el);}
+        else if(geom.type==="MultiPoint") pointsFrom(c).forEach((pt)=>{const q=xy(pt),el=document.createElementNS(svgNS,"circle");el.setAttribute("cx",q[0]);el.setAttribute("cy",q[1]);el.setAttribute("r","3.3");el.setAttribute("fill","#087f9d");svg.append(el);});
+        else if(geom.type==="LineString")addPath(pathD(c,false),"none","#187fa4");
+        else if(geom.type==="MultiLineString")c.forEach((line)=>addPath(pathD(line,false),"none","#187fa4"));
+        else if(geom.type==="Polygon")c.forEach((ring,i)=>addPath(pathD(ring,true),i===0?"rgba(25,143,155,.19)":"none","#187f82"));
+        else if(geom.type==="MultiPolygon")c.forEach((poly)=>{poly.forEach((ring,i)=>addPath(pathD(ring,true),i===0?"rgba(25,143,155,.19)":"none","#187f82"));});
+        else if(geom.type==="GeometryCollection")(geom.geometries||[]).forEach(renderGeom);
+      };
+      features.slice(0,250).forEach((feature)=>renderGeom(feature.geometry));
+      const frame=document.createElement("div");frame.className="viewer-image-frame";frame.append(svg);stage().append(frame);
+      metaStrip([["LONGITUDE",minX.toFixed(5)+" … "+maxX.toFixed(5)],["LATITUDE",minY.toFixed(5)+" … "+maxY.toFixed(5)],["DRAWN FEATURES",String(Math.min(features.length,250))]]);
+    } else addNotice("No coordinate pairs were found. Displaying the document structure below.","warn");
+    const propertyRows=features.slice(0,100).map((f,i)=>[i+1,f.geometry&&f.geometry.type||"",JSON.stringify(f.properties||{})]);
+    if(propertyRows.length)addTable(propertyRows,["#","Geometry","Properties"],"First 100 features.");
+    addPre(JSON.stringify(data,null,2).slice(0,200000),"GEOJSON STRUCTURE");
+    currentPreview={type:"geojson",value:data,text:JSON.stringify(data,null,2)};
+    $("#viewerCopy").disabled=false;
+  }
+  async function renderMesh3D(file, extension) {
+    if(file.size>MAX_CONVERT_BYTES)throw new Error("3D mesh preview is limited to 100 MB in the browser.");
+    const [THREE,ControlsModule,LoaderModule]=await Promise.all([
+      importModule(MODULES.three),
+      importModule(MODULES.orbitControls),
+      importModule(extension===".stl"?MODULES.stlLoader:extension===".ply"?MODULES.plyLoader:MODULES.objLoader)
+    ]);
+    const controlsClass=ControlsModule.OrbitControls;
+    const loader=extension===".stl"?new LoaderModule.STLLoader():extension===".ply"?new LoaderModule.PLYLoader():new LoaderModule.OBJLoader();
+    addHeading("Interactive 3D mesh viewer","Drag to orbit, scroll or pinch to zoom. This is a geometry preview; engineering dimensions and topology should be checked in a dedicated CAD/mesh tool.");
+    const wrap=document.createElement("div");wrap.className="viewer-3d-wrap";
+    const canvas=document.createElement("canvas");canvas.className="viewer-3d-canvas";wrap.append(canvas);stage().append(wrap);
+    const renderer=new THREE.WebGLRenderer({canvas:canvas,antialias:true,alpha:false,preserveDrawingBuffer:true});
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,1.5));renderer.setClearColor(0xf0f7f8,1);
+    const scene=new THREE.Scene();scene.background=new THREE.Color(0xf0f7f8);
+    const camera=new THREE.PerspectiveCamera(45,1,0.01,100000);
+    scene.add(new THREE.HemisphereLight(0xffffff,0x9bb5c1,2));
+    const keyLight=new THREE.DirectionalLight(0xffffff,2.2);keyLight.position.set(4,6,8);scene.add(keyLight);
+    const fillLight=new THREE.DirectionalLight(0x82bfd0,1.2);fillLight.position.set(-5,-2,-4);scene.add(fillLight);
+    let object;
+    if(extension===".obj") object=loader.parse(await file.text());
+    else {
+      const geometry=loader.parse(await file.arrayBuffer());
+      if(!geometry.attributes.normal)geometry.computeVertexNormals();
+      const hasColor=!!geometry.attributes.color;
+      const material=new THREE.MeshStandardMaterial({color:hasColor?0xffffff:0x238ca5,vertexColors:hasColor,metalness:.13,roughness:.48,side:THREE.DoubleSide});
+      object=new THREE.Mesh(geometry,material);
+    }
+    object.traverse((child)=>{
+      if(child.isMesh){
+        if(child.geometry && !child.geometry.attributes.normal)child.geometry.computeVertexNormals();
+        if(extension===".obj")child.material=new THREE.MeshStandardMaterial({color:0x238ca5,metalness:.12,roughness:.5,side:THREE.DoubleSide});
+      }
+    });
+    const bounds=new THREE.Box3().setFromObject(object),size=bounds.getSize(new THREE.Vector3()),center=bounds.getCenter(new THREE.Vector3());
+    object.position.sub(center);scene.add(object);
+    const maxEdge=Math.max(size.x,size.y,size.z)||1;
+    camera.near=Math.max(maxEdge/10000,.0001);camera.far=Math.max(maxEdge*100,100);camera.position.set(maxEdge*1.6,maxEdge*1.25,maxEdge*2.2);camera.updateProjectionMatrix();
+    const controls=new controlsClass(camera,renderer.domElement);controls.enableDamping=true;controls.target.set(0,0,0);
+    const render=()=>{const w=Math.max(1,wrap.clientWidth-2),h=Math.max(240,Math.min(560,window.innerWidth<600?330:470));renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();renderer.render(scene,camera);};
+    controls.addEventListener("change",()=>renderer.render(scene,camera));
+    const resizeObserver=typeof ResizeObserver!=="undefined"?new ResizeObserver(render):null;if(resizeObserver)resizeObserver.observe(wrap);
+    render();
+    metaStrip([["MESH EXTENSION",extension.toUpperCase()],["BOUNDING SIZE",[size.x,size.y,size.z].map((n)=>Number(n.toPrecision(5))).join(" × ")],["MESH VIEW","WebGL · orbit controls"]]);
+    currentPreview={type:"mesh3d",object:object,THREE:THREE};
+    $("#viewerCopy").disabled=false;
+    activeViewerCleanup=()=>{if(resizeObserver)resizeObserver.disconnect();controls.dispose();renderer.dispose();renderer.forceContextLoss();scene.traverse((o)=>{if(o.geometry)o.geometry.dispose();if(Array.isArray(o.material))o.material.forEach((m)=>m.dispose());else if(o.material)o.material.dispose();});};
+  }
   async function renderModel(file) {
     await loadScript(LIB.modelViewer,()=>!!customElements.get("model-viewer"),true);
     await customElements.whenDefined("model-viewer");
@@ -616,7 +719,9 @@
         kind="table";setTargets(targetsFor(file,kind));await renderCsv(file,ext===".tsv"||ext===".tab"?"\t":"");
       } else if([".xlsx",".xlsm",".xlsb",".xls",".ods"].includes(ext)) {
         kind="workbook";setTargets(targetsFor(file,kind));await renderWorkbook(file);
-      } else if([".json",".geojson"].includes(ext)) {
+      } else if(ext===".geojson") {
+        kind="geojson";setTargets(targetsFor(file,kind));await renderGeoJSON(file);
+      } else if(ext===".json") {
         kind="json";setTargets(targetsFor(file,kind));await renderJson(file);
       } else if([".yaml",".yml"].includes(ext)) {
         kind="yaml";setTargets(targetsFor(file,kind));await renderYaml(file);
@@ -632,6 +737,8 @@
         kind="video";addHeading("Video player","Only codecs supported by this browser can play. The file is not transcoded in-place.");
         const video=document.createElement("video");video.controls=true;video.preload="metadata";video.src=newObjectUrl(file);video.className="viewer-media";stage().append(video);
         metaStrip([["FILE",file.name],["SIZE",formatBytes(file.size)],["PLAYBACK","Native browser video"]]);setTargets([{value:"zip",label:"Create ZIP archive"}]);
+      } else if([".stl",".obj",".ply"].includes(ext)) {
+        kind="mesh3d";setTargets(targetsFor(file,kind));await renderMesh3D(file,ext);
       } else if([".glb",".gltf"].includes(ext)) {
         kind="model";await renderModel(file);setTargets([{value:"zip",label:"Create ZIP archive"}]);
       } else if(supportedTextExt(ext)) {
@@ -741,6 +848,23 @@
       } else if(target==="decompress") {
         if(!activeGzipBytes) throw new Error("Decompression payload is not available. Reload the .gz file first.");
         blob=new Blob([activeGzipBytes]);name=file.name.replace(/\.gz$/i,"")||"decompressed.bin";
+      } else if (target === "mesh-stl" || target === "mesh-obj") {
+        if(currentPreview.type!=="mesh3d" || !currentPreview.object) throw new Error("Load an STL, OBJ or PLY mesh before exporting another mesh format.");
+        const exporterUrl=target==="mesh-stl"?MODULES.stlExporter:MODULES.objExporter;
+        const exporterModule=await importModule(exporterUrl);
+        const exporter=target==="mesh-stl"?new exporterModule.STLExporter():new exporterModule.OBJExporter();
+        const exported=target==="mesh-stl"?exporter.parse(currentPreview.object,{binary:true}):exporter.parse(currentPreview.object);
+        blob=new Blob([exported],{type:target==="mesh-stl"?"model/stl":"text/plain;charset=utf-8"});
+        name=file.name.replace(/\.[^.]+$/,"")+(target==="mesh-stl"?".stl":".obj");
+      } else if(target==="geojson-csv") {
+        const parsed=JSON.parse(await file.text());
+        const features=parsed.type==="FeatureCollection"?(parsed.features||[]):parsed.type==="Feature"?[parsed]:[];
+        const rows=features.map((feature)=>Object.assign({geometry:JSON.stringify(feature.geometry||null)},feature.properties||{}));
+        if(!rows.length)throw new Error("No GeoJSON features were available to export.");
+        await loadScript(LIB.papa,()=>!!window.Papa);
+        const fields=Array.from(new Set(rows.flatMap((row)=>Object.keys(row))));
+        blob=new Blob([window.Papa.unparse({fields:fields,data:rows.map((row)=>fields.map((key)=>row[key]))})],{type:"text/csv;charset=utf-8"});
+        name=file.name.replace(/\.[^.]+$/,"")+".csv";
       } else if(["png","jpeg","webp","pdf-png","pdf-jpeg"].includes(target)) {
         let canvas=currentPreview.canvas;
         if(!canvas && currentPreview.image) canvas=await imageToCanvas(file);

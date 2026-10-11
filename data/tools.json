@@ -214,5 +214,50 @@
     "repository": "https://github.com/google/model-viewer",
     "license": "Apache-2.0",
     "run": "<model-viewer src='model.glb' camera-controls>"
+  },
+  {
+    "name": "netcdfjs",
+    "category": "Earth & planetary science",
+    "summary": "Browser JavaScript reader for NetCDF classic and 64-bit-offset files; exposes dimensions, global attributes, variables and selected data values. NetCDF-4/HDF5 containers require an HDF5 reader.",
+    "source": "https://github.com/cheminfo/netcdfjs",
+    "repository": "https://github.com/cheminfo/netcdfjs",
+    "license": "MIT",
+    "run": "new NetCDFReader(new Uint8Array(arrayBuffer))"
+  },
+  {
+    "name": "h5wasm",
+    "category": "Scientific binary data",
+    "summary": "WebAssembly-powered HDF5 reader/writer. SPACE uses its read-only API to enumerate HDF5 / NetCDF-4 / NeXus groups and dataset shapes and sample small datasets; some compression plugins and datatypes may not be supported.",
+    "source": "https://github.com/usnistgov/h5wasm",
+    "repository": "https://github.com/usnistgov/h5wasm",
+    "license": "NIST-developed software; retain the full LICENSE.txt notice and verify any linked HDF5 components",
+    "run": "await h5wasm.ready; new h5wasm.File(path, 'r')"
+  },
+  {
+    "name": "hyparquet",
+    "category": "Data engineering / science tables",
+    "summary": "Dependency-free JavaScript Parquet reader with metadata/schema access and bounded row sampling, including GeoParquet geometries. Browser preview is capped and is not a full analytical engine.",
+    "source": "https://github.com/hyparam/hyparquet",
+    "repository": "https://github.com/hyparam/hyparquet",
+    "license": "MIT",
+    "run": "await parquetReadObjects({ file: asyncBuffer, rowStart: 0, rowEnd: 250 })"
+  },
+  {
+    "name": "Three.js loaders / exporters",
+    "category": "3D / engineering mesh",
+    "summary": "WebGL toolkit with open-source STL, OBJ and PLY loaders and STL/OBJ exporters. SPACE offers interactive mesh viewing plus a mesh conversion workflow; unit scale, engineering tolerances and unsupported object materials require separate validation.",
+    "source": "https://threejs.org/manual/pages/loading-3d-models.html",
+    "repository": "https://github.com/mrdoob/three.js",
+    "license": "MIT",
+    "run": "STLLoader.parse(arrayBuffer); new OBJExporter().parse(object)"
+  },
+  {
+    "name": "GeoJSON viewer",
+    "category": "Geospatial",
+    "summary": "Native local coordinate/feature preview with a lightweight extent sketch, geometry summary and feature-property export to CSV. Projection, topology and coordinate-reference correctness are not validated.",
+    "source": "https://www.rfc-editor.org/rfc/rfc7946",
+    "repository": "https://www.rfc-editor.org/rfc/rfc7946",
+    "license": "RFC 7946 specification / standard; no third-party library copied",
+    "run": "Load a local FeatureCollection or Feature"
   }
 ]

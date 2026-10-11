@@ -1680,8 +1680,34 @@
     try { await navigator.clipboard.writeText(value); status("Preview text copied to clipboard.","success"); }
     catch (_) { status("Clipboard access is blocked by this browser. Select and copy the visible text instead.","warn"); }
   }
+  async function loadZarrFolder(fileList) {
+    const files=Array.from(fileList||[]);
+    if(!files.length)return;
+    if(files.length>MAX_ARCHIVE_ENTRIES)throw new Error("Zarr directory contains more than "+MAX_ARCHIVE_ENTRIES+" files; create a Zarr ZIP archive and retry.");
+    const total=files.reduce((sum,file)=>sum+file.size,0);
+    if(total>MAX_CONVERT_BYTES)throw new Error("Zarr directory is larger than the 100 MB browser limit. Use a ZIP of a smaller sample or the provider's native Zarr reader.");
+    const firstPath=files[0].webkitRelativePath||files[0].name;
+    const root=firstPath.split("/").filter(Boolean)[0]||"local.zarr";
+    const entries={};
+    let readTotal=0;
+    for(const file of files) {
+      const path=(file.webkitRelativePath||file.name).replace(/^\/+/,"").replace(/(^|\/)\.\.(?=\/|$)/g,"");
+      if(!path)continue;
+      const bytes=new Uint8Array(await file.arrayBuffer());
+      entries[path]=bytes;readTotal+=bytes.byteLength;
+      if(readTotal>MAX_CONVERT_BYTES)throw new Error("Loaded Zarr directory passed the 100 MB safety limit.");
+    }
+    if(!Object.keys(entries).some((path)=>/(^|\/)(\.zarray|zarr\.json)$/.test(path)))throw new Error("The selected folder does not contain Zarr v2 (.zarray) or Zarr v3 (zarr.json) array metadata.");
+    await loadScript(LIB.fflate,()=>!!window.fflate);
+    const packed=window.fflate.zipSync(entries,{level:0});
+    if(packed.byteLength>MAX_CONVERT_BYTES)throw new Error("The ZIP container for this Zarr directory exceeds 100 MB. Zip the store externally and retry with a smaller dataset.");
+    const storeName=/\.zarr$/i.test(root)?root:root+".zarr";
+    const zipped=new File([packed],storeName+".zip",{type:"application/zip",lastModified:Date.now()});
+    $("#viewerFolder").value="";
+    await renderFile(zipped);
+  }
   function resetViewer() {
-    clearStage();activeFile=null;$("#viewerFile").value="";$("#viewerFileName").textContent="No file selected";
+    clearStage();activeFile=null;$("#viewerFile").value="";$("#viewerFolder").value="";$("#viewerFileName").textContent="No file selected";
     $("#viewerFileMeta").textContent="Files stay in this browser tab";$("#viewerDetected").textContent="Ready for a file";
     $("#viewerTarget").replaceChildren(new Option("Choose a conversion…",""));$("#viewerConvert").disabled=true;
     $("#viewerOriginal").disabled=true;$("#viewerCopy").disabled=true;$("#viewerSheet").classList.add("hidden");
@@ -1690,6 +1716,8 @@
   }
   function wireViewer() {
     $("#viewerFile").addEventListener("change",(e)=>{const file=e.target.files && e.target.files[0];if(file)renderFile(file).catch((err)=>status(err.message,"error"));});
+    $("#viewerOpenFolder").addEventListener("click",()=>$("#viewerFolder").click());
+    $("#viewerFolder").addEventListener("change",(e)=>loadZarrFolder(e.target.files).catch((err)=>status(err.message,"error")));
     const drop=$("#viewerDrop");
     drop.addEventListener("dragover",(e)=>{e.preventDefault();drop.classList.add("drag-over");});
     drop.addEventListener("dragleave",()=>drop.classList.remove("drag-over"));

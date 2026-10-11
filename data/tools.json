@@ -259,5 +259,23 @@
     "repository": "https://www.rfc-editor.org/rfc/rfc7946",
     "license": "RFC 7946 specification / standard; no third-party library copied",
     "run": "Load a local FeatureCollection or Feature"
+  },
+  {
+    "name": "OpenCascade / occt-import-js",
+    "category": "CAD import",
+    "summary": "WebAssembly interface to OpenCascade for importing BREP, STEP and IGES and triangulating surfaces for display in Three.js. Mesh preview exports are not exact CAD geometry and omit parametric features / constraints / PMI.",
+    "source": "https://github.com/kovacsv/occt-import-js",
+    "repository": "https://github.com/kovacsv/occt-import-js",
+    "license": "LGPL-2.1 for occt-import-js package; retain license notice and review linked OpenCascade components before redistribution",
+    "run": "occt.ReadStepFile(new Uint8Array(buffer), { linearUnit: 'millimeter' })"
+  },
+  {
+    "name": "Shapefile.js (shpjs)",
+    "category": "Geospatial vector",
+    "summary": "Reads a local ZIP archive containing shapefile components and turns features into GeoJSON for a local extent preview, property listing and GeoJSON/CSV export. CRS and topology must be checked separately.",
+    "source": "https://github.com/calvinmetcalf/shapefile-js",
+    "repository": "https://github.com/calvinmetcalf/shapefile-js",
+    "license": "MIT",
+    "run": "await shp(zipArrayBuffer)"
   }
 ]

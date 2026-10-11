@@ -382,28 +382,55 @@
     } finally { clearTimeout(timer); }
   }
   async function searchNasa(query, limit, temporal) {
-    // CMR requires a collection/provider constraint for granule searches, so discover collections first.
-    const params = new URLSearchParams({keyword:query,page_size:String(limit)});
+    // CMR requires a collection/provider constraint for granule searches. First discover matching collections.
+    const params = new URLSearchParams({keyword:query,page_size:String(Math.min(30,Math.max(8,limit*2)))});
     params.set("sort_key[]","-revision_date");
-    const data = await fetchJSON("https://cmr.earthdata.nasa.gov/search/collections.json?" + params.toString());
-    const entries = data.feed?.entry || [];
-    return entries.map(item => {
-      const conceptId = item.id || item.concept_id;
-      const granuleParams = new URLSearchParams({collection_concept_id:conceptId,page_size:String(limit)});
+    const collectionData = await fetchJSON("https://cmr.earthdata.nasa.gov/search/collections.json?" + params.toString());
+    const collections = collectionData.feed?.entry || [];
+    const collectionById = new Map(collections.map(c => [c.id || c.concept_id,c]));
+    if (!collections.length) return [];
+    const pageSize = Math.min(10, Math.max(2, Math.ceil(limit / Math.min(collections.length,4))));
+    const searches = await Promise.all(collections.slice(0,Math.min(collections.length,4)).map(async collection => {
+      const conceptId = collection.id || collection.concept_id;
+      if (!conceptId) return [];
+      const granuleParams = new URLSearchParams({collection_concept_id:conceptId,page_size:String(pageSize)});
+      granuleParams.set("sort_key[]","-start_date");
       if (temporal) granuleParams.set("temporal",temporal);
-      const granuleAPI = "https://cmr.earthdata.nasa.gov/search/granules.json?" + granuleParams.toString();
-      const shortName = item.short_name || item.entry_title || item.title || conceptId;
-      return {
-        title:item.title || item.entry_title || shortName,
-        id:conceptId,
-        collection:shortName,
-        summary:item.summary || item.description || item.version_description || "NASA Earth science collection",
-        portalUrl:"https://search.earthdata.nasa.gov/search?q=" + encodeURIComponent(shortName),
-        assetUrl:granuleAPI,
-        assetLabel:"Granules API",
-        docUrl:"https://cmr.earthdata.nasa.gov/search/concepts/" + encodeURIComponent(conceptId)
-      };
-    });
+      try {
+        const data = await fetchJSON("https://cmr.earthdata.nasa.gov/search/granules.json?" + granuleParams.toString());
+        return (data.feed?.entry || []).map(item => {
+          const links = item.links || [];
+          const dataLink = links.find(link => (link.rel || "").includes("/data#") && !link.inherited && /^https?:\/\//i.test(link.href || "") && !/\/search\/granules(?:\?|$)/i.test(link.href));
+          const metadataLink = links.find(link => (link.rel || "").includes("/metadata#") && !link.inherited && /^https?:\/\//i.test(link.href || "") && /(?:\.json|\.xml)(?:\?|$)/i.test(link.href));
+          const browseLink = links.find(link => link.inherited && /search\.earthdata\.nasa\.gov\/search\/granules/i.test(link.href || ""));
+          const collectionInfo = collectionById.get(item.collection_concept_id) || collection;
+          return {
+            title:item.title || item.producer_granule_id || item.id || "NASA data granule",
+            id:item.id,
+            collection:collectionInfo.short_name || collectionInfo.entry_title || collectionInfo.title || item.collection_concept_id || "NASA collection",
+            time_start:item.time_start,
+            summary:item.orbit_number ? "Orbit " + item.orbit_number : (item.day_night_flag || collectionInfo.summary || ""),
+            portalUrl:browseLink?.href || ("https://search.earthdata.nasa.gov/search?q=" + encodeURIComponent(query)),
+            assetUrl:dataLink?.href || metadataLink?.href,
+            assetLabel:dataLink ? (dataLink.title || "Download product") : (metadataLink ? "Metadata file" : ""),
+            docUrl:"https://cmr.earthdata.nasa.gov/search/concepts/" + encodeURIComponent(item.id)
+          };
+        });
+      } catch (_) { return []; }
+    }));
+    const granules = searches.flat().slice(0,limit);
+    if (granules.length) return granules;
+    // Some searchable collection records have no exposed granules or need login/mission access.
+    return collections.slice(0,limit).map(item => ({
+      title:item.title || item.entry_title || item.short_name || item.id,
+      id:item.id || item.concept_id,
+      collection:item.short_name || item.entry_title || item.title,
+      summary:item.summary || item.description || "NASA Earth science collection",
+      portalUrl:"https://search.earthdata.nasa.gov/search?q=" + encodeURIComponent(item.short_name || item.title || query),
+      assetUrl:undefined,
+      assetLabel:"",
+      docUrl:"https://cmr.earthdata.nasa.gov/search/concepts/" + encodeURIComponent(item.id || item.concept_id)
+    }));
   }
   async function searchCopernicus(query, limit, temporal) {
     const base = "https://stac.dataspace.copernicus.eu/v1";

@@ -15,7 +15,8 @@
   const MAX_CONVERT_BYTES = 100 * 1024 * 1024;
   const MAX_TABLE_ROWS = 250;
   const libs = {};
-  let activeFile = null, currentPreview = {}, activeUrl = "", activeArchive = null, activeGzipBytes = null, activeViewerCleanup = null;
+  let activeFile = null, currentPreview = {}, activeUrl = "", activeArchive = null, activeGzipBytes = null, activeViewerCleanup = null, activeFormatRecord = null;
+  let formatRegistryPromise = null;
 
   const stage = () => $("#viewerStage");
   function status(message, type) {
@@ -202,6 +203,32 @@
     if (kind === "zip") return common;
     if (kind === "gzip") return [{value:"decompress",label:"Decompress GZIP"}].concat(common);
     return common;
+  }
+  async function findFormatRecord(file) {
+    if(!formatRegistryPromise) formatRegistryPromise=fetch("./data/formats.json",{cache:"no-cache"}).then((r)=>r.ok?r.json():[]).catch(()=>[]);
+    const registry=await formatRegistryPromise;
+    const name=(file && file.name || "").toLowerCase();
+    const extension=extOf(file).toLowerCase();
+    return registry.find((record)=>(record.extensions||[]).some((value)=>{
+      const token=String(value||"").toLowerCase().trim();
+      return token.startsWith(".") && (extension===token || name.endsWith(token));
+    })) || null;
+  }
+  function renderRegistryContext(record) {
+    if(!record)return;
+    const details=document.createElement("details");details.className="viewer-format-context";
+    const summary=document.createElement("summary");summary.textContent="Format registry match · "+safeText(record.name);details.append(summary);
+    const p=document.createElement("p");p.textContent=safeText(record.uses||"Registered file format.")+" Domain: "+safeText(record.group||"Unclassified")+". Validation guidance: "+safeText(record.validation||"Use the format-specific validator.");details.append(p);
+    const links=document.createElement("div");links.className="viewer-context-links";
+    [[record.tool,"Official tool / validator"],[record.docs,"Specification / documentation"]].forEach(([url,label])=>{
+      try {
+        const u=new URL(url);if(!["https:","http:"].includes(u.protocol))return;
+        const a=document.createElement("a");a.href=u.href;a.target="_blank";a.rel="noopener noreferrer";a.textContent=label+" ↗";links.append(a);
+      } catch (_) {}
+    });
+    if(links.childNodes.length)details.append(links);
+    const caveat=document.createElement("small");caveat.textContent="A registry match describes the file suffix; it does not prove file integrity or format compliance.";details.append(caveat);
+    stage().append(details);
   }
   function noteFile(file, subtitle) {
     $("#viewerFileName").textContent = file.name;
@@ -702,8 +729,9 @@
   }
   async function renderFile(file) {
     if(!file) return;
-    clearStage();activeFile=file;
-    noteFile(file,"Detecting format…");
+    clearStage();activeFile=file;activeFormatRecord=null;
+    activeFormatRecord=await findFormatRecord(file);
+    noteFile(file,activeFormatRecord ? activeFormatRecord.name : "Detecting format…");
     setTargets([{value:"zip",label:"Create ZIP archive"}]);
     $("#viewerSheet").classList.add("hidden");$("#viewerSheet").replaceChildren();
     status("Reading "+file.name+" locally. No upload is performed.");
@@ -769,7 +797,8 @@
         currentPreview={type:"binary",bytes:bytes};
         setTargets([{value:"zip",label:"Create ZIP archive"}]);
       }
-      noteFile(file,(currentPreview.type||kind).toUpperCase()+" VIEW");
+      renderRegistryContext(activeFormatRecord);
+      noteFile(file,(currentPreview.type||kind).toUpperCase()+" VIEW"+(activeFormatRecord ? " · "+activeFormatRecord.name : ""));
       status("Loaded "+file.name+". Preview and supported conversions run in this browser session.","success");
     } catch(err) {
       addHeading("Viewer could not fully decode this file","The file remains local; try the matching official reader from the Format Atlas.");
@@ -777,7 +806,8 @@
       renderBinary(bytes,file.name);
       addNotice((err && err.message) || String(err),"warn");
       currentPreview={type:"binary",bytes:bytes};
-      noteFile(file,"BASIC BYTE VIEW");
+      renderRegistryContext(activeFormatRecord);
+      noteFile(file,"BASIC BYTE VIEW"+(activeFormatRecord ? " · "+activeFormatRecord.name : ""));
       setTargets([{value:"zip",label:"Create ZIP archive"}]);
       status("Specialized reader unavailable; showing a safe byte preview instead.","error");
     }
@@ -864,6 +894,7 @@
           generatedAt:new Date().toISOString(),
           source:{name:file.name,extension:extOf(file)||null,mimeType:file.type||null,sizeBytes:file.size,lastModified:file.lastModified?new Date(file.lastModified).toISOString():null},
           viewer:{mode:currentPreview.type||"unknown",previewText:currentPreview.text?safeText(currentPreview.text).slice(0,12000):null,tableColumns:currentPreview.headers||null,previewRows:currentPreview.rows?currentPreview.rows.slice(0,100):null,archiveEntryPaths:currentPreview.entries?Object.keys(currentPreview.entries).slice(0,1000):null},
+          formatRegistry:activeFormatRecord?{name:activeFormatRecord.name,group:activeFormatRecord.group,uses:activeFormatRecord.uses,validation:activeFormatRecord.validation,docs:activeFormatRecord.docs,tool:activeFormatRecord.tool}:null,
           signature:{firstBytesHex:Array.from(signature).map((v)=>v.toString(16).padStart(2,"0")).join(" "),firstBytesAscii:Array.from(signature).map((v)=>v>=32&&v<127?String.fromCharCode(v):".").join("")},
           note:"Identification report only. A matching extension or signature is not proof of standards compliance, data integrity, scientific calibration or provenance."
         };

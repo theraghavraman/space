@@ -786,6 +786,35 @@
       return {hdus:[],error:(err&&err.message)||String(err)};
     }
   }
+  async function readFitsTableSample(hdus) {
+    const candidate=(hdus||[]).find((hdu)=>hdu.dataUnit && typeof hdu.dataUnit.getRows==="function" && Array.isArray(hdu.dataUnit.columns) && Number(hdu.dataUnit.rows)>0);
+    if(!candidate)return null;
+    const table=candidate.dataUnit;
+    const fields=table.columns.filter((field)=>field!=null).map((field)=>String(field));
+    if(!fields.length)return null;
+    const count=Math.min(MAX_TABLE_ROWS,Number(table.rows)||0);
+    const rows=await new Promise((resolve,reject)=>{
+      let settled=false;
+      const timer=setTimeout(()=>{if(!settled){settled=true;reject(new Error("FITS table sample read timed out."));}},12000);
+      const done=(value)=>{if(settled)return;settled=true;clearTimeout(timer);resolve(Array.isArray(value)?value:[]);};
+      try {
+        const result=table.getRows(0,count,(value)=>done(value));
+        if(Array.isArray(result))done(result);
+      } catch(err) {if(!settled){settled=true;clearTimeout(timer);reject(err);}}
+    });
+    const normalized=rows.slice(0,count).map((row)=>{
+      const output={};
+      fields.forEach((field)=>{
+        let value=row && row[field];
+        if(value instanceof ArrayBuffer)value=Array.from(new Uint8Array(value));
+        else if(ArrayBuffer.isView(value))value=Array.from(value);
+        else if(Array.isArray(value))value=value.slice(0,1000);
+        output[field]=value==null?null:value;
+      });
+      return output;
+    });
+    return {hdu:candidate.index,name:candidate.extname||("HDU "+candidate.index),rows:normalized,fields:fields,totalRows:Number(table.rows)||0};
+  }
   async function renderFits(file) {
     const fitsInspection=await inspectFitsHdus(file);
     const bytes=await readHead(file,Math.min(file.size,2880*32));
@@ -810,9 +839,19 @@
         ["HDU","Type","BITPIX","Axes","Dimensions","EXTNAME","Data unit","BUNIT"],
         "Parsed by astrojs/fitsjs · HDU summaries only. Image preview below is still the primary plane.");
     } else if(fitsInspection.error) addNotice("Extended FITS reader: "+fitsInspection.error,"warn");
+    let fitsTableSample=null;
+    try {
+      fitsTableSample=await readFitsTableSample(fitsInspection.hdus);
+      if(fitsTableSample) {
+        addTable(fitsTableSample.rows.map((row)=>fitsTableSample.fields.map((field)=>row[field])),
+          fitsTableSample.fields,
+          fitsTableSample.name+" · "+fitsTableSample.totalRows.toLocaleString()+" total rows; showing up to "+MAX_TABLE_ROWS+". Table values are parsed by FITS.js.");
+        addNotice("FITS table export is limited to the displayed sample rows. Use FITS-aware astronomy software for complete table exports or scientific validation.","warn");
+      }
+    } catch(err) { addNotice("FITS table preview could not be read: "+err.message,"warn"); }
     if(end<0 || naxis<2 || !width || !height || ![8,16,32,-32,-64].includes(bitpix)) {
       addNotice("This FITS file has no supported primary 2-D image plane. Header inspection works; table, cube and compressed-image visualization needs a specialized FITS reader.","warn");
-      currentPreview={type:"fits",text:details,hdus:fitsInspection.hdus};$("#viewerCopy").disabled=false;return;
+      currentPreview={type:"fits",text:details,hdus:fitsInspection.hdus,fitsRows:fitsTableSample&&fitsTableSample.rows,fitsFields:fitsTableSample&&fitsTableSample.fields,fitsTableHdu:fitsTableSample&&fitsTableSample.name};$("#viewerCopy").disabled=false;return;
     }
     const dataOffset=Math.ceil(end/2880)*2880;
     const pixelCount=width*height, bytesPerPixel=Math.abs(bitpix)/8;
@@ -835,7 +874,7 @@
     for(let i=0;i<sample.length;i++){const v=Math.max(0,Math.min(255,Math.round((sample[i]-min)/span*255)));img.data[i*4]=v;img.data[i*4+1]=v;img.data[i*4+2]=v;img.data[i*4+3]=Number.isFinite(sample[i])?255:0;}
     ctx.putImageData(img,0,0);
     const wrap=document.createElement("div");wrap.className="viewer-image-frame";wrap.append(canvas);stage().append(wrap);
-    currentPreview={type:"fits",canvas:canvas,text:details,hdus:fitsInspection.hdus};
+    currentPreview={type:"fits",canvas:canvas,text:details,hdus:fitsInspection.hdus,fitsRows:fitsTableSample&&fitsTableSample.rows,fitsFields:fitsTableSample&&fitsTableSample.fields,fitsTableHdu:fitsTableSample&&fitsTableSample.name};
     metaStrip([["PIXEL SCALE",String(min)+" → "+String(max)],["PREVIEW",outW+" × "+outH],["RENDER","Grayscale stretch"]]);
     $("#viewerCopy").disabled=false;
   }

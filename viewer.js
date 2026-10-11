@@ -841,13 +841,14 @@
     const num=Number(raw.replace(/[dD]/,"E"));
     return Number.isFinite(num)?num:raw;
   }
-  async function readFitsPrimaryHeader(file) {
+  async function readFitsHeaderAt(file, baseOffset=0) {
     const chunks=[];
     let total=0,headerEnd=-1;
-    while(total<Math.min(file.size,FITS_MAX_HEADER_BYTES)) {
-      const start=total,end=Math.min(file.size,total+FITS_RANGE_CHUNK_BYTES);
+    const available=Math.max(0,file.size-baseOffset);
+    while(total<Math.min(available,FITS_MAX_HEADER_BYTES)) {
+      const start=total,end=Math.min(available,total+FITS_RANGE_CHUNK_BYTES);
       if(end<=start)break;
-      const bytes=new Uint8Array(await file.slice(start,end).arrayBuffer());
+      const bytes=new Uint8Array(await file.slice(baseOffset+start,baseOffset+end).arrayBuffer());
       if(!bytes.length)break;
       chunks.push(bytes);total+=bytes.length;
       for(let p=0;p+80<=bytes.length;p+=80) {
@@ -868,14 +869,57 @@
             headerCards.push({key:key,value:value,card:card});
           }
         }
-        const signature=headerCards.find((card)=>card.key==="SIMPLE");
-        if(!signature || signature.value!==true)throw new Error("The remote/local file does not have a valid SIMPLE = T primary FITS header.");
-        return {headers,headerCards,headerEnd,headerBytes:all.slice(0,Math.ceil(headerEnd/2880)*2880),dataOffset:Math.ceil(headerEnd/2880)*2880};
+        if(baseOffset===0) {
+          const signature=headerCards.find((card)=>card.key==="SIMPLE");
+          if(!signature || signature.value!==true)throw new Error("The file does not have a valid SIMPLE = T primary FITS header.");
+        } else if(!headers.XTENSION) {
+          throw new Error("Expected a FITS extension header at byte offset "+baseOffset+".");
+        }
+        const paddedHeaderBytes=Math.ceil(headerEnd/2880)*2880;
+        return {headers,headerCards,headerStart:baseOffset,headerEnd:baseOffset+headerEnd,headerLength:headerEnd,dataOffset:baseOffset+paddedHeaderBytes,headerBytes:all.slice(0,paddedHeaderBytes)};
       }
     }
     throw new Error(total>=FITS_MAX_HEADER_BYTES
-      ? "No END card found within the 16 MB primary-header safety limit."
-      : "FITS header is incomplete or missing its END card.");
+      ? "No END card found within the 16 MB HDU-header safety limit."
+      : "FITS HDU header is incomplete or missing its END card at byte offset "+baseOffset+".");
+  }
+  async function readFitsPrimaryHeader(file) {
+    return readFitsHeaderAt(file,0);
+  }
+  function fitsHduDataLength(headers) {
+    const naxis=Number(headers.NAXIS||0),bitpix=Math.abs(Number(headers.BITPIX||0));
+    if(!Number.isInteger(naxis)||naxis<0||naxis>9||!Number.isFinite(bitpix)||bitpix%8!==0)return null;
+    let elements=naxis===0?0:1;
+    for(let i=1;i<=naxis;i++) {
+      const dimension=Number(headers["NAXIS"+i]);
+      if(!Number.isSafeInteger(dimension)||dimension<0)return null;
+      elements*=dimension;
+      if(!Number.isSafeInteger(elements))return null;
+    }
+    const pcount=Number(headers.PCOUNT||0),gcount=Number(headers.GCOUNT==null?1:headers.GCOUNT);
+    if(!Number.isSafeInteger(pcount)||pcount<0||!Number.isSafeInteger(gcount)||gcount<1)return null;
+    const size=(elements*bitpix/8+pcount)*gcount;
+    return Number.isSafeInteger(size)&&size>=0?size:null;
+  }
+  async function scanFitsHdus(file,maxHdus=32) {
+    const hdus=[];
+    let offset=0;
+    for(let index=0;index<maxHdus&&offset<file.size;index++) {
+      let parsed;
+      try {parsed=await readFitsHeaderAt(file,offset);} catch(err) {
+        if(index===0)throw err;
+        break;
+      }
+      const headers=parsed.headers,dataLength=fitsHduDataLength(headers);
+      const xtension=safeText(headers.XTENSION||"PRIMARY").toUpperCase();
+      const record={index:index,headers:headers,headerCards:parsed.headerCards,headerStart:parsed.headerStart,dataOffset:parsed.dataOffset,dataLength:dataLength,xtension:xtension};
+      hdus.push(record);
+      if(dataLength==null)break;
+      const nextOffset=parsed.dataOffset+Math.ceil(dataLength/2880)*2880;
+      if(!Number.isSafeInteger(nextOffset)||nextOffset<=offset||nextOffset>file.size)break;
+      offset=nextOffset;
+    }
+    return hdus;
   }
   async function renderFitsRangePreview(file) {
     const parsed=await readFitsPrimaryHeader(file);

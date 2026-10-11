@@ -73,7 +73,9 @@
     plyLoader: "https://esm.sh/three@0.180.0/examples/jsm/loaders/PLYLoader.js",
     orbitControls: "https://esm.sh/three@0.180.0/examples/jsm/controls/OrbitControls.js",
     stlExporter: "https://esm.sh/three@0.180.0/examples/jsm/exporters/STLExporter.js",
-    objExporter: "https://esm.sh/three@0.180.0/examples/jsm/exporters/OBJExporter.js"
+    objExporter: "https://esm.sh/three@0.180.0/examples/jsm/exporters/OBJExporter.js",
+    occtJs: "https://cdn.jsdelivr.net/npm/occt-import-js@0.0.23/dist/occt-import-js.js",
+    occtWasm: "https://cdn.jsdelivr.net/npm/occt-import-js@0.0.23/dist/occt-import-js.wasm"
   };
   const modulePromises = {};
   async function importModule(url) {
@@ -87,7 +89,8 @@
     [LIB.yaml]:"sha384-+pxiN6T7yvpryuJmE1gM9PX7yQit15auDb+ZwwvJOd/4be2Cie5/IuVXgQb/S9du",
     [LIB.fflate]:"sha384-DT0Ls0mO7JmjTnT+oBuMhEJzYJO1zUqzuuMXNdnOmOQRIpN2BgSjvBV/j50NngIT",
     [LIB.geotiff]:"sha384-m5adk5PRgt3JjiYbYoG8oXxc3EgRFKc1aCBgKzyxqxnbYpdiAMlHkR0gVDp03Q/H",
-    [LIB.modelViewer]:"sha384-sr9b4Ux0WhAUGclJ0ym0FSY2zSOMmNSn0bP/SA0e6bNCrpn/5W3QL8mm+LdlQMKw"
+    [LIB.modelViewer]:"sha384-sr9b4Ux0WhAUGclJ0ym0FSY2zSOMmNSn0bP/SA0e6bNCrpn/5W3QL8mm+LdlQMKw",
+    [LIB.occtJs]:"sha384-Z8pO9JEhFZF+mvDKxMuLvPT85VP7nly8CqYjBatl0bMeW9OsaKCes4gEUPL4nihc"
   };
   function clearStage() {
     if (typeof activeViewerCleanup === "function") { try { activeViewerCleanup(); } catch (_) {} activeViewerCleanup = null; }
@@ -691,14 +694,15 @@
   }
   async function renderMesh3D(file, extension) {
     if(file.size>MAX_CONVERT_BYTES)throw new Error("3D mesh preview is limited to 100 MB in the browser.");
+    const isCad=[".step",".stp",".iges",".igs",".brep",".brp"].includes(extension);
     const [THREE,ControlsModule,LoaderModule]=await Promise.all([
       importModule(MODULES.three),
       importModule(MODULES.orbitControls),
-      importModule(extension===".stl"?MODULES.stlLoader:extension===".ply"?MODULES.plyLoader:MODULES.objLoader)
+      isCad ? Promise.resolve(null) : importModule(extension===".stl"?MODULES.stlLoader:extension===".ply"?MODULES.plyLoader:MODULES.objLoader)
     ]);
     const controlsClass=ControlsModule.OrbitControls;
     const loader=extension===".stl"?new LoaderModule.STLLoader():extension===".ply"?new LoaderModule.PLYLoader():new LoaderModule.OBJLoader();
-    addHeading("Interactive 3D mesh viewer","Drag to orbit, scroll or pinch to zoom. This is a geometry preview; engineering dimensions and topology should be checked in a dedicated CAD/mesh tool.");
+    addHeading("Interactive 3D model viewer",isCad?"OpenCascade WebAssembly triangulation for STEP/IGES/BREP (millimetre output). The tessellated preview is not an authoritative CAD model; features, constraints, PMI and exact surfaces are not preserved in mesh exports.":"Drag to orbit, scroll or pinch to zoom. This is a geometry preview; engineering dimensions and topology should be checked in a dedicated CAD/mesh tool.");
     const wrap=document.createElement("div");wrap.className="viewer-3d-wrap";
     const canvas=document.createElement("canvas");canvas.className="viewer-3d-canvas";wrap.append(canvas);stage().append(wrap);
     const renderer=new THREE.WebGLRenderer({canvas:canvas,antialias:true,alpha:false,preserveDrawingBuffer:true});
@@ -709,7 +713,30 @@
     const keyLight=new THREE.DirectionalLight(0xffffff,2.2);keyLight.position.set(4,6,8);scene.add(keyLight);
     const fillLight=new THREE.DirectionalLight(0x82bfd0,1.2);fillLight.position.set(-5,-2,-4);scene.add(fillLight);
     let object;
-    if(extension===".obj") object=loader.parse(await file.text());
+    if(isCad) {
+      await loadScript(LIB.occtJs,()=>typeof window.occtimportjs==="function");
+      const occt=await window.occtimportjs({locateFile:(path)=>path.endsWith(".wasm")?LIB.occtWasm:path});
+      const bytes=new Uint8Array(await file.arrayBuffer());
+      const options={linearUnit:"millimeter",linearDeflectionType:"bounding_box_ratio",linearDeflection:0.001,angularDeflection:0.5};
+      let imported;
+      if(extension===".step"||extension===".stp")imported=occt.ReadStepFile(bytes,options);
+      else if(extension===".iges"||extension===".igs")imported=occt.ReadIgesFile(bytes,options);
+      else imported=occt.ReadBrepFile(bytes,options);
+      if(!imported || !imported.success || !Array.isArray(imported.meshes) || !imported.meshes.length)throw new Error("OpenCascade could not triangulate this CAD file. Check source validity, units and supported entities.");
+      object=new THREE.Group();
+      imported.meshes.forEach((source)=>{
+        const attr=source.attributes||{},position=attr.position&&attr.position.array,normal=attr.normal&&attr.normal.array,index=source.index&&source.index.array;
+        if(!position || !position.length)return;
+        const geometry=new THREE.BufferGeometry();
+        geometry.setAttribute("position",new THREE.Float32BufferAttribute(position,3));
+        if(normal&&normal.length)geometry.setAttribute("normal",new THREE.Float32BufferAttribute(normal,3));else geometry.computeVertexNormals();
+        if(index&&index.length)geometry.setIndex(index);
+        const c=source.color;
+        const color=Array.isArray(c)&&c.length>=3?new THREE.Color(Number(c[0]),Number(c[1]),Number(c[2])):new THREE.Color(0x238ca5);
+        object.add(new THREE.Mesh(geometry,new THREE.MeshStandardMaterial({color:color,metalness:.1,roughness:.5,side:THREE.DoubleSide})));
+      });
+      if(!object.children.length)throw new Error("CAD import returned no renderable mesh surfaces.");
+    } else if(extension===".obj") object=loader.parse(await file.text());
     else {
       const geometry=loader.parse(await file.arrayBuffer());
       if(!geometry.attributes.normal)geometry.computeVertexNormals();
@@ -732,7 +759,7 @@
     controls.addEventListener("change",()=>renderer.render(scene,camera));
     const resizeObserver=typeof ResizeObserver!=="undefined"?new ResizeObserver(render):null;if(resizeObserver)resizeObserver.observe(wrap);
     render();
-    metaStrip([["MESH EXTENSION",extension.toUpperCase()],["BOUNDING SIZE",[size.x,size.y,size.z].map((n)=>Number(n.toPrecision(5))).join(" × ")],["MESH VIEW","WebGL · orbit controls"]]);
+    metaStrip([["MODEL TYPE",extension.toUpperCase()],["BOUNDING SIZE",[size.x,size.y,size.z].map((n)=>Number(n.toPrecision(5))).join(" × ")],["VIEWER",isCad?"OpenCascade WASM":"WebGL · orbit controls"]]);
     currentPreview={type:"mesh3d",object:object,THREE:THREE};
     $("#viewerCopy").disabled=false;
     activeViewerCleanup=()=>{if(resizeObserver)resizeObserver.disconnect();controls.dispose();renderer.dispose();renderer.forceContextLoss();scene.traverse((o)=>{if(o.geometry)o.geometry.dispose();if(Array.isArray(o.material))o.material.forEach((m)=>m.dispose());else if(o.material)o.material.dispose();});};

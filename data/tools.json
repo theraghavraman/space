@@ -182,7 +182,7 @@
   {
     "name": "FITS.js (astrojs)",
     "category": "Astronomy",
-    "summary": "Pinned browser FITS parser used to enumerate HDUs, extension headers and bounded binary-table samples. SPACE can export displayed table samples to CSV/JSON/XLSX and renders a conservative uncompressed primary 2-D image preview; full table export, compressed images and standards validation require specialist processing.",
+    "summary": "Pinned browser FITS parser used for small-file HDU/extension-header inventory and bounded binary-table samples. Large FITS files use SPACE's separate byte-range thumbnail reader for the uncompressed primary 2-D numeric image plane, avoiding full-file buffering. Remote previews require CORS and exposed Content-Range; table export remains capped and official validation is still external.",
     "source": "https://github.com/astrojs/fitsjs",
     "repository": "https://github.com/astrojs/fitsjs",
     "license": "MIT",
@@ -340,5 +340,14 @@
     "repository": "https://github.com/mrdoob/three.js",
     "license": "MIT",
     "run": "new THREE.Points(geometry, new THREE.PointsMaterial({ size: 2, vertexColors: true }))"
+  },
+  {
+    "name": "SPACE Large FITS Range Preview",
+    "category": "Large-file browser viewer",
+    "summary": "The SPACE viewer reads the primary FITS header and samples selected image rows with local File.slice() or remote HTTP Range requests. The 900 MB simulated test transferred about 5.8 MB of pixel data. Remote hosts must honor Range and permit CORS with exposed Content-Range; compressed FITS and full science validation are outside this preview.",
+    "source": "https://github.com/theraghavraman/space",
+    "repository": "https://github.com/theraghavraman/space",
+    "license": "Repository license applies",
+    "run": "Open a local .fits file >100 MB or enter a public HTTPS FITS URL in the viewer's remote range preview"
   }
 ]

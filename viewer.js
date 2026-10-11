@@ -843,21 +843,21 @@
   }
   async function readFitsPrimaryHeader(file) {
     const chunks=[];
-    let total=0,complete=false,headerEnd=-1,headerCards=[],headers={};
+    let total=0,headerEnd=-1;
     while(total<Math.min(file.size,FITS_MAX_HEADER_BYTES)) {
-      const end=Math.min(file.size,total+FITS_RANGE_CHUNK_BYTES);
-      if(end<=total)break;
-      const bytes=new Uint8Array(await file.slice(total,end).arrayBuffer());
+      const start=total,end=Math.min(file.size,total+FITS_RANGE_CHUNK_BYTES);
+      if(end<=start)break;
+      const bytes=new Uint8Array(await file.slice(start,end).arrayBuffer());
       if(!bytes.length)break;
       chunks.push(bytes);total+=bytes.length;
-      const all=new Uint8Array(total);let offset=0;
-      chunks.forEach((chunk)=>{all.set(chunk,offset);offset+=chunk.length;});
-      for(let p=0;p+80<=all.length;p+=80) {
-        const card=Array.from(all.subarray(p,p+80)).map((byte)=>String.fromCharCode(byte)).join("");
-        const key=card.slice(0,8).trim();
-        if(key==="END"){headerEnd=p+80;complete=true;break;}
+      for(let p=0;p+80<=bytes.length;p+=80) {
+        const key=Array.from(bytes.subarray(p,p+8)).map((byte)=>String.fromCharCode(byte)).join("").trim();
+        if(key==="END"){headerEnd=start+p+80;break;}
       }
-      if(complete) {
+      if(headerEnd>=0) {
+        const all=new Uint8Array(total);let offset=0;
+        chunks.forEach((chunk)=>{all.set(chunk,offset);offset+=chunk.length;});
+        const headers={},headerCards=[];
         for(let p=0;p<headerEnd;p+=80) {
           const card=Array.from(all.subarray(p,p+80)).map((byte)=>String.fromCharCode(byte)).join("");
           const key=card.slice(0,8).trim();

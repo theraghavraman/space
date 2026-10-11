@@ -217,7 +217,8 @@
     const ext = extOf(file);
     const common = [{value:"report-json",label:"Export file report → JSON"}, {value:"zip",label:"Create ZIP archive"}];
     if (kind === "image") return [{value:"png",label:"Image → PNG"}, {value:"jpeg",label:"Image → JPEG"}, {value:"webp",label:"Image → WebP"}].concat(common);
-    if (kind === "tiff" || kind === "fits") return [{value:"png",label:"Rendered preview → PNG"}, {value:"jpeg",label:"Rendered preview → JPEG"}].concat(common);
+    if (kind === "tiff") return [{value:"png",label:"Rendered preview → PNG"}, {value:"jpeg",label:"Rendered preview → JPEG"}].concat(common);
+    if (kind === "fits") return [{value:"png",label:"Rendered preview → PNG"}, {value:"jpeg",label:"Rendered preview → JPEG"}].concat(currentPreview.fitsRows && currentPreview.fitsRows.length ? [{value:"fits-table-csv",label:"HDU table sample → CSV"},{value:"fits-table-json",label:"HDU table sample → JSON"},{value:"fits-table-xlsx",label:"HDU table sample → XLSX"}] : []).concat(common);
     if (kind === "pdf") return [{value:"pdf-png",label:"Current PDF page → PNG"}, {value:"pdf-jpeg",label:"Current PDF page → JPEG"}, {value:"pdf-text",label:"Extract PDF text → TXT"}].concat(common);
     if (kind === "table" || kind === "jsonl" || ext===".csv" || ext===".tsv" || ext===".tab" || ext===".jsonl" || ext===".ndjson") return [{value:"csv",label:"Export records → CSV"}, {value:"tsv",label:"Export records → TSV"}, {value:"json",label:"Records → JSON array"}, {value:"xlsx",label:"Records → XLSX workbook"}].concat(common);
     if (kind === "json") return [{value:"json-pretty",label:"Pretty-print JSON"}, {value:"json-min",label:"Minify JSON"}, {value:"csv",label:"JSON records → CSV"}, {value:"tsv",label:"JSON records → TSV"}, {value:"xlsx",label:"JSON records → XLSX"}, {value:"yaml",label:"JSON → YAML"}, {value:"xml",label:"JSON → XML"}].concat(common);
@@ -778,7 +779,7 @@
         const extType=header.get("XTENSION")||header.extensionType||(index===0?"PRIMARY":"IMAGE");
         const dataUnit=hdu.data;
         let type=dataUnit&&dataUnit.constructor&&dataUnit.constructor.name||"No data";
-        return {index:index,extType:safeText(extType),bitpix:header.get("BITPIX"),naxis:axisCount,dimensions:dimensions,extname:header.get("EXTNAME")||"",bunit:header.get("BUNIT")||"",dataType:type,header:header};
+        return {index:index,extType:safeText(extType),bitpix:header.get("BITPIX"),naxis:axisCount,dimensions:dimensions,extname:header.get("EXTNAME")||"",bunit:header.get("BUNIT")||"",dataType:type,header:header,dataUnit:dataUnit};
       });
       return {hdus:hdus,error:null};
     } catch(err) {

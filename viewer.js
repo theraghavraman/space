@@ -846,7 +846,7 @@
     const queryStatus=document.createElement("div");queryStatus.className="viewer-query-status";queryStatus.setAttribute("role","status");
     const out=document.createElement("div");out.className="viewer-query-output";
     const wrap=document.createElement("div");wrap.className="viewer-query-box";
-    const label=document.createElement("label");label.textContent="SQL query (SELECT / WITH only)";
+    const label=document.createElement("label");label.textContent="SQL query (SELECT only)";
     wrap.append(label,area,run,queryStatus,out);stage().append(wrap);
     const queryState={rows:[],fields:[],sql:area.value};
     const execute=()=>{

@@ -790,15 +790,15 @@
       } else if([".mp3",".wav",".ogg",".flac",".m4a",".aac"].includes(ext) || (file.type&&file.type.startsWith("audio/"))) {
         kind="audio";addHeading("Audio player","Playback depends on the codecs supported by this browser.");
         const audio=document.createElement("audio");audio.controls=true;audio.src=newObjectUrl(file);audio.className="viewer-media";stage().append(audio);currentPreview={type:"audio"};
-        metaStrip([["FILE",file.name],["SIZE",formatBytes(file.size)],["PLAYBACK","Native browser audio"]]);setTargets([{value:"zip",label:"Create ZIP archive"}]);
+        metaStrip([["FILE",file.name],["SIZE",formatBytes(file.size)],["PLAYBACK","Native browser audio"]]);setTargets([{value:"report-json",label:"Export file report → JSON"},{value:"zip",label:"Create ZIP archive"}]);
       } else if([".mp4",".mov",".webm",".mkv",".avi",".m4v"].includes(ext) || (file.type&&file.type.startsWith("video/"))) {
         kind="video";addHeading("Video player","Only codecs supported by this browser can play. The file is not transcoded in-place.");
         const video=document.createElement("video");video.controls=true;video.preload="metadata";video.src=newObjectUrl(file);video.className="viewer-media";stage().append(video);currentPreview={type:"video"};
-        metaStrip([["FILE",file.name],["SIZE",formatBytes(file.size)],["PLAYBACK","Native browser video"]]);setTargets([{value:"zip",label:"Create ZIP archive"}]);
+        metaStrip([["FILE",file.name],["SIZE",formatBytes(file.size)],["PLAYBACK","Native browser video"]]);setTargets([{value:"report-json",label:"Export file report → JSON"},{value:"zip",label:"Create ZIP archive"}]);
       } else if([".stl",".obj",".ply"].includes(ext)) {
         kind="mesh3d";setTargets(targetsFor(file,kind));await renderMesh3D(file,ext);
       } else if([".glb",".gltf"].includes(ext)) {
-        kind="model";await renderModel(file);setTargets([{value:"zip",label:"Create ZIP archive"}]);
+        kind="model";await renderModel(file);setTargets([{value:"report-json",label:"Export file report → JSON"},{value:"zip",label:"Create ZIP archive"}]);
       } else if(supportedTextExt(ext)) {
         kind="text";const text=await file.slice(0,MAX_TEXT_BYTES).text();
         addHeading("Text / source viewer","Shown as text, never executed as HTML or script.");
@@ -815,7 +815,7 @@
         if(readable) addNotice("These initial bytes appear text-like. Use the format-specific documentation to interpret records and units.");
         addNotice("Scientific binary families such as CDF, HDF5, GRIB, PDS, CCSDS telemetry and SPICE kernels need specialist parsers for full fidelity.","warn");
         currentPreview={type:"binary",bytes:bytes};
-        setTargets([{value:"zip",label:"Create ZIP archive"}]);
+        setTargets([{value:"report-json",label:"Export file report → JSON"},{value:"zip",label:"Create ZIP archive"}]);
       }
       renderRegistryContext(activeFormatRecord);
       noteFile(file,(currentPreview.type||kind).toUpperCase()+" VIEW"+(activeFormatRecord ? " · "+activeFormatRecord.name : ""));
@@ -828,7 +828,7 @@
       currentPreview={type:"binary",bytes:bytes};
       renderRegistryContext(activeFormatRecord);
       noteFile(file,"BASIC BYTE VIEW"+(activeFormatRecord ? " · "+activeFormatRecord.name : ""));
-      setTargets([{value:"zip",label:"Create ZIP archive"}]);
+      setTargets([{value:"report-json",label:"Export file report → JSON"},{value:"zip",label:"Create ZIP archive"}]);
       status("Specialized reader unavailable; showing a safe byte preview instead.","error");
     }
   }

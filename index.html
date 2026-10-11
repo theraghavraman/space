@@ -89,6 +89,14 @@
     @media(max-width:900px){.viewer-layout{grid-template-columns:1fr}.viewer-side{border-right:0;border-bottom:1px solid #d8e4e9;border-radius:17px 17px 0 0}.viewer-main{padding:14px}.viewer-stage{min-height:280px}}
     @media(max-width:540px){.viewer-side{padding:13px}.viewer-main{padding:10px}.viewer-stage{padding:9px;min-height:230px}.viewer-empty{min-height:220px}.viewer-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.viewer-archive-item{grid-template-columns:minmax(0,1fr) auto}.viewer-archive-item small{display:none}.viewer-page-controls{gap:7px}.viewer-page-controls .btn{padding:7px}}
 
+  
+    .remote-fits-box{display:grid;gap:9px;margin:14px 0;padding:13px;border:1px solid #c7dbe3;border-radius:13px;background:linear-gradient(135deg,#e7f3f6,#f1f6f0)}
+    .remote-fits-box label{font:10px var(--mono);text-transform:uppercase;letter-spacing:.8px;color:#426b7e}
+    .remote-fits-box input{width:100%;min-width:0;padding:10px 11px;border:1px solid #bfd4de;border-radius:9px;background:#f8fbfc;color:#203b52;font:12px var(--mono)}
+    .remote-fits-box input::placeholder{color:#8ba0ad}
+    .remote-fits-box .hint{margin:0;line-height:1.5}
+    .remote-fits-box .btn{width:100%}
+
   </style>
   <script src="./app.js" defer></script>
   <script src="./viewer.js" defer></script>
@@ -188,6 +196,12 @@
         </label>
         <div class="viewer-actions"><input class="viewer-file-input" id="viewerFolder" type="file" webkitdirectory directory multiple aria-label="Choose a Zarr store folder"><button class="btn small" id="viewerOpenFolder" type="button">Open Zarr folder</button></div>
         <p class="hint">For a chunked Zarr store, select the store folder or upload a ZIP of the store.</p>
+        <div class="remote-fits-box">
+          <label for="remoteFitsUrl">Preview a remote FITS file (byte ranges)</label>
+          <input id="remoteFitsUrl" type="url" inputmode="url" placeholder="https://archive.example.org/large-image.fits" autocomplete="url" spellcheck="false">
+          <button class="btn primary" id="openRemoteFits" type="button">Preview large FITS ↗</button>
+          <p class="hint">Reads the header and a sampled set of pixel rows only. The host must permit browser CORS and HTTP Range requests; the full 900 MB source is not downloaded.</p>
+        </div>
         <div class="viewer-file-name" id="viewerFileName">No file selected</div>
         <div class="viewer-file-meta" id="viewerFileMeta">Files stay in this browser tab</div>
         <div class="viewer-detected" id="viewerDetected">Ready for a file</div>

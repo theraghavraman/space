@@ -674,6 +674,7 @@
       if(!features.length)throw new Error("SHP entries were present but no features could be decoded from this ZIP.");
       const geo={type:"FeatureCollection",features:features};
       const geoFile=new File([JSON.stringify(geo)],file.name.replace(/\.zip$/i,"")+".geojson",{type:"application/geo+json"});
+      activeFormatRecord=await findFormatRecord(geoFile);
       await renderGeoJSON(geoFile);
       addNotice("Shapefile archive parsed locally: "+layers.length+" layer(s), "+features.length+" feature(s). Attribute schemas, CRS/projection and topology should still be checked in a GIS.","success");
       currentPreview={type:"geojson",value:geo,text:JSON.stringify(geo,null,2)};
@@ -1135,6 +1136,7 @@
             if(doc.querySelector("parsererror")) throw new Error("Input XML is malformed and cannot be converted.");
             value=xmlToObject(doc.documentElement);
           } else value=await parseFileValue(file);
+          if(value && !Array.isArray(value) && Array.isArray(value.rows) && Array.isArray(value.fields)) value=value.rows;
           if(target==="json") {output=JSON.stringify(value,null,2);mime="application/json;charset=utf-8";ext="json";}
           else if(target==="yaml") {await loadScript(LIB.yaml,()=>!!window.jsyaml);output=window.jsyaml.dump(value,{noRefs:true,lineWidth:110});mime="text/yaml;charset=utf-8";ext="yaml";}
           else {output='<?xml version="1.0" encoding="UTF-8"?>\n'+objectToXml(value,"root");mime="application/xml;charset=utf-8";ext="xml";}

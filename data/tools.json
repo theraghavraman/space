@@ -1,0 +1,146 @@
+[
+  {
+    "name": "FITSverify",
+    "category": "Astronomy",
+    "summary": "Official FITS conformance checker for FITS Standard 3.0. This is the proper tool for deep FITS validation, unlike a signature check.",
+    "source": "https://heasarc.gsfc.nasa.gov/docs/software/ftools/fitsverify/",
+    "repository": "https://heasarc.gsfc.nasa.gov/docs/software/ftools/fitsverify/",
+    "license": "Obtain from the official HEASARC distribution; review the included source and CFITSIO terms.",
+    "run": "fitsverify filename.fits"
+  },
+  {
+    "name": "CFITSIO",
+    "category": "Astronomy",
+    "summary": "C library for FITS I/O; foundational to FITS readers, writers and validation tooling.",
+    "source": "https://heasarc.gsfc.nasa.gov/docs/software/fitsio/",
+    "repository": "https://heasarc.gsfc.nasa.gov/docs/software/fitsio/",
+    "license": "Review the license included in the current release package.",
+    "run": "fitsverify --help"
+  },
+  {
+    "name": "NASA PDS Validate",
+    "category": "Planetary science",
+    "summary": "Official validator for PDS4 product labels/data and PDS3 volumes. Open-source repository includes a license file.",
+    "source": "https://pds.nasa.gov/tools/about/",
+    "repository": "https://github.com/NASA-PDS/validate",
+    "license": "Apache-2.0 (check the repository license and version).",
+    "run": "validate --help"
+  },
+  {
+    "name": "NAIF SPICE Toolkit",
+    "category": "Navigation",
+    "summary": "Official toolkit for reading and querying SPICE kernels (.bsp, .bc, .bpc, .tf, .ti, .tls, .tsc, .tm, .dsk and more).",
+    "source": "https://naif.jpl.nasa.gov/naif/toolkit.html",
+    "repository": "https://naif.jpl.nasa.gov/naif/toolkit.html",
+    "license": "Read the NAIF Toolkit license and support rules before redistribution.",
+    "run": "Use brief SPICE utilities or language bindings for kernel checks."
+  },
+  {
+    "name": "NASA CDF library / tools",
+    "category": "Space physics",
+    "summary": "Official CDF software for inspecting Common Data Format files.",
+    "source": "https://cdf.gsfc.nasa.gov/",
+    "repository": "https://cdf.gsfc.nasa.gov/",
+    "license": "Review license terms with the current package.",
+    "run": "Use CDF tools for variable, attribute and record checks."
+  },
+  {
+    "name": "NetCDF utilities",
+    "category": "Earth science",
+    "summary": "NetCDF libraries and command-line utilities for scientific array data.",
+    "source": "https://www.unidata.ucar.edu/software/netcdf/",
+    "repository": "https://github.com/Unidata/netcdf-c",
+    "license": "Check the repository's current license and dependency notices.",
+    "run": "ncdump -h data.nc"
+  },
+  {
+    "name": "HDFView / HDF5 utilities",
+    "category": "Earth science",
+    "summary": "Inspect HDF5 groups, arrays and metadata; HDF4 needs separate support.",
+    "source": "https://www.hdfgroup.org/downloads/",
+    "repository": "https://github.com/HDFGroup/hdf5",
+    "license": "Review each current package's license and dependencies.",
+    "run": "h5dump -H product.h5"
+  },
+  {
+    "name": "GDAL / OGR",
+    "category": "Geospatial",
+    "summary": "Open-source geospatial toolkit for GeoTIFF, COG, JP2 where drivers are built, VRT, GeoPackage, Shapefile and many raster/vector sources.",
+    "source": "https://gdal.org/",
+    "repository": "https://github.com/OSGeo/gdal",
+    "license": "MIT-style/X license; verify the version and linked driver dependencies.",
+    "run": "gdalinfo scene.tif"
+  },
+  {
+    "name": "ecCodes",
+    "category": "Weather",
+    "summary": "ECMWF library and tools to decode and inspect GRIB messages.",
+    "source": "https://confluence.ecmwf.int/display/ECC",
+    "repository": "https://github.com/ecmwf/eccodes",
+    "license": "Check the repository license and third-party notices.",
+    "run": "grib_ls forecast.grib2"
+  },
+  {
+    "name": "Apache Parquet / Arrow",
+    "category": "Science data engineering",
+    "summary": "Columnar file and memory formats useful for derived scientific tables and high-performance analysis.",
+    "source": "https://arrow.apache.org/",
+    "repository": "https://github.com/apache/arrow",
+    "license": "Apache-2.0; verify per-project notices.",
+    "run": "Use PyArrow/DuckDB schema and metadata readers."
+  },
+  {
+    "name": "Zarr",
+    "category": "Cloud science",
+    "summary": "Specification and libraries for chunked N-dimensional arrays in directory/object-store datasets.",
+    "source": "https://zarr.dev/",
+    "repository": "https://github.com/zarr-developers/zarr-python",
+    "license": "Check repository license and Zarr version.",
+    "run": "Validate metadata and expected chunk references."
+  },
+  {
+    "name": "QGIS",
+    "category": "Geospatial",
+    "summary": "Desktop GIS for inspecting geospatial science products and metadata.",
+    "source": "https://qgis.org/",
+    "repository": "https://github.com/qgis/QGIS",
+    "license": "GPL; do not copy components into a different product without satisfying the applicable license.",
+    "run": "Open the data in QGIS; inspect CRS and geometry validity."
+  },
+  {
+    "name": "ISIS (USGS Astrogeology)",
+    "category": "Planetary science",
+    "summary": "Planetary image-processing system for supported mission image cubes.",
+    "source": "https://isis.astrogeology.usgs.gov/",
+    "repository": "https://github.com/DOI-USGS/ISIS3",
+    "license": "Review the repository's current license and bundled dependency terms.",
+    "run": "Use ISIS cube and label inspection tools."
+  },
+  {
+    "name": "EUMDAC",
+    "category": "Meteorology",
+    "summary": "Official EUMETSAT data access client for searching and downloading products using supported authentication.",
+    "source": "https://user.eumetsat.int/resources/user-guides/eumdac",
+    "repository": "https://github.com/EUMETSAT/eumdac",
+    "license": "Review current repository license.",
+    "run": "Install and configure according to official docs; do not store user credentials in public code."
+  },
+  {
+    "name": "Copernicus Data Space API clients",
+    "category": "Earth observation",
+    "summary": "Official documentation for CDSE APIs including STAC, OData and download services.",
+    "source": "https://documentation.dataspace.copernicus.eu/APIs.html",
+    "repository": "https://github.com/ESA",
+    "license": "Client library licenses vary; review before reuse.",
+    "run": "Use STAC search or the provider's documented download API."
+  },
+  {
+    "name": "NASA Earthdata CMR",
+    "category": "Discovery",
+    "summary": "Publicly documented Common Metadata Repository API for collection and granule discovery; selected download links may require Earthdata Login.",
+    "source": "https://cmr.earthdata.nasa.gov/search/site/docs/search/api.html",
+    "repository": "https://github.com/nasa",
+    "license": "API is a service; repository licenses apply to each client separately.",
+    "run": "GET /search/granules.json?keyword=...&page_size=10"
+  }
+]

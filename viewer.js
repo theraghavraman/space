@@ -851,8 +851,8 @@
     const queryState={rows:[],fields:[],sql:area.value};
     const execute=()=>{
       const query=area.value.trim().replace(/;+\s*$/,"");
-      if(!/^(SELECT|WITH)\b/i.test(query)||query.includes(";")) {
-        queryStatus.textContent="Only one read-only SELECT or WITH query is allowed. Mutating statements and multiple statements are rejected.";
+      if(!/^SELECT\b/i.test(query)||query.includes(";")) {
+        queryStatus.textContent="Only one read-only SELECT query is allowed. WITH, mutating statements and multiple statements are rejected.";
         queryStatus.className="viewer-query-status error";return;
       }
       try {

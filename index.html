@@ -49,7 +49,7 @@
         <div class="eyebrow"><span class="pulse"></span> GLOBAL SPACE DATA NETWORK <span style="color:#527692">/</span> ONLINE</div>
         <h1>The universe has<br>a <span class="outline">file format.</span></h1>
         <p>Discover mission archives, fetch public datasets, inspect file signatures and find the right validation tools — from astronomy and planetary science to satellite imagery, telemetry and spacecraft engineering.</p>
-        <div class="hero-actions"><a class="btn primary" href="#finder">⌕ &nbsp; Find mission data</a><a class="btn" href="#formats">Explore 80+ format families ↘</a></div>
+        <div class="hero-actions"><a class="btn primary" href="#finder">⌕ &nbsp; Find mission data</a><a class="btn" href="#formats">Explore the format atlas ↘</a></div>
         <div class="hero-foot"><span><span class="pulse"></span> LOCAL FILES STAY LOCAL</span><span>◈ OFFICIAL SOURCE LINKS</span><span>⌁ API-AWARE DISCOVERY</span></div>
       </div>
       <div class="hero-art" aria-label="Stylized Earth with a satellite in orbit">
@@ -63,7 +63,7 @@
     </section>
 
     <div class="shell"><div class="signal-strip" aria-label="Platform scope">
-      <div class="signal"><div class="num" id="formatCount">80+</div><div class="desc">FORMAT FAMILIES<br>AND EXTENSION GROUPS</div></div>
+      <div class="signal"><div class="num" id="formatCount">54 / 124</div><div class="desc">FORMAT ENTRIES / EXTENSION ALIASES<br>IN THE CURRENT REGISTRY</div></div>
       <div class="signal"><div class="num">15+</div><div class="desc">AGENCIES & NATIONAL<br>DATA ECOSYSTEMS</div></div>
       <div class="signal"><div class="num">04</div><div class="desc">VALIDATION LAYERS<br>FROM SIGNATURE TO SCIENCE</div></div>
       <div class="signal"><div class="num" style="color:var(--mint)">0</div><div class="desc">UPLOADS REQUIRED FOR<br>LOCAL FILE INSPECTION</div></div>
@@ -76,7 +76,7 @@
           <div class="panel-header"><div><div class="panel-title">Cross-agency search console</div><div class="panel-meta">Search live catalogue metadata when an official API is available</div></div><span class="tag live">API READY</span></div>
           <div class="panel-body">
             <div class="field-row">
-              <div class="field"><label for="sourceSelect">Data source</label><select id="sourceSelect"><option value="nasa">NASA Earthdata / CMR</option><option value="copernicus">ESA / Copernicus STAC</option><option value="eumetsat">EUMETSAT Data Store</option><option value="jaxa">JAXA DARTS (portal)</option><option value="isro">ISRO Bhoonidhi (account)</option><option value="china">China NSSDC (portal)</option><option value="russia">Roscosmos Geoportal (access may be needed)</option><option value="canada">Canada EODMS</option><option value="noaa">NOAA open datasets</option></select></div>
+              <div class="field"><label for="sourceSelect">Data source</label><select id="sourceSelect"><option value="nasa">NASA Earthdata / CMR</option><option value="copernicus">ESA / Copernicus STAC</option><option value="eumetsat">EUMETSAT Data Store</option><option value="jaxa">JAXA DARTS (portal)</option><option value="isro">ISRO Bhoonidhi (account)</option><option value="china-nssdc">China NSSDC (portal)</option><option value="roscosmos">Roscosmos (mission access may vary)</option><option value="canada-eodms">Canada EODMS</option><option value="noaa-class">NOAA CLASS</option></select></div>
               <div class="field"><label for="queryInput">Mission / instrument / topic</label><input id="queryInput" placeholder="e.g. Chandrayaan, Sentinel-2, aurora, ocean colour" value="Earth observation"></div>
             </div>
             <div class="field-row" style="margin-top:13px">
@@ -85,7 +85,7 @@
               <div class="field"><label for="resultLimit">Results</label><select id="resultLimit"><option value="5">5</option><option value="10" selected>10</option><option value="20">20</option></select></div>
             </div>
             <div class="controls"><button class="btn primary" id="runSearch">Run catalogue search ↗</button><button class="btn ghost" id="openPortal">Open native portal ↗</button><span class="tag">NO API KEYS STORED</span></div>
-            <div class="hint">Live API calls currently target public NASA CMR search, Copernicus STAC collection discovery and EUMETSAT's public browse service. Providers with authentication or non-public endpoints open their official data portal instead.</div>
+            <div class="hint">Live browser searches use NASA CMR, Copernicus STAC and EUMETSAT’s public collection browse API. Providers requiring authentication open their official data portal instead.</div>
             <div id="searchStatus" class="status hidden" role="status" aria-live="polite"></div>
             <div id="searchResults" class="result-list"><div class="empty">Choose a source, describe the dataset and run a search. Your query is sent only to the selected provider's documented public API, if available.</div></div>
           </div>

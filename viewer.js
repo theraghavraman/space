@@ -1195,8 +1195,8 @@
     const classAttr=parsed.attributes.classification;
     const classValues=classAttr && (classAttr.value || classAttr);
     let minX=Infinity,minY=Infinity,minZ=Infinity,maxX=-Infinity,maxY=-Infinity,maxZ=-Infinity;
-    const stride=Math.max(1,Math.floor(totalPoints/sampleCount));
-    for(let i=0,n=0;i<totalPoints && n<sampleCount;i+=stride,n++){
+    for(let n=0;n<sampleCount;n++){
+      const i=Math.min(totalPoints-1,Math.floor(n*totalPoints/sampleCount));
       const x=Number(positions[i*3]),y=Number(positions[i*3+1]),z=Number(positions[i*3+2]);
       if(!Number.isFinite(x)||!Number.isFinite(y)||!Number.isFinite(z))continue;
       minX=Math.min(minX,x);minY=Math.min(minY,y);minZ=Math.min(minZ,z);

@@ -106,7 +106,7 @@
     [LIB.occtJs]:"sha384-Z8pO9JEhFZF+mvDKxMuLvPT85VP7nly8CqYjBatl0bMeW9OsaKCes4gEUPL4nihc",
     [LIB.shpJs]:"sha384-SvGz+Dog2fS8fxYIE3uf8dViVamrK+czJkTku+kw1+N5jqZULpRyEpT1JqF0PaWh",
     [LIB.sqlJs]:"sha384-DJiKBv+LC78e5InEB+MvFIAH079ynMK/ERTtFUCpDzXhH1Bht7aVfpg3yOVsuYl9",
-    [LIB.bz2]:"sha384-PLACEHOLDER"
+    [LIB.bz2]:"sha384-oHssvY2AN7qFTBvbSscGhCX88RRP8EWpSyUnGrJN8aTKEN6V65tkpF09pOi1pC6+"
   };
   function clearStage() {
     if (typeof activeViewerCleanup === "function") { try { activeViewerCleanup(); } catch (_) {} activeViewerCleanup = null; }

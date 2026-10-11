@@ -77,6 +77,8 @@
     parquet: "https://cdn.jsdelivr.net/npm/hyparquet@1.31.3/src/index.min.js",
     zarr: "https://cdn.jsdelivr.net/npm/zarrita@0.7.5/+esm",
     arrow: "https://cdn.jsdelivr.net/npm/apache-arrow@21.2.0/+esm",
+    loadersCore: "https://esm.sh/@loaders.gl/core@4.5.4?bundle",
+    loadersLas: "https://esm.sh/@loaders.gl/las@4.5.4?bundle",
     three: "https://esm.sh/three@0.180.0",
     stlLoader: "https://esm.sh/three@0.180.0/examples/jsm/loaders/STLLoader.js",
     objLoader: "https://esm.sh/three@0.180.0/examples/jsm/loaders/OBJLoader.js",
@@ -227,6 +229,7 @@
     if (kind === "sqlite") return [{value:"sql-csv",label:"Query results → CSV"}, {value:"sql-tsv",label:"Query results → TSV"}, {value:"sql-json",label:"Query results → JSON"}, {value:"sql-xlsx",label:"Query results → XLSX"}].concat(common);
     if (kind === "geojson") return [{value:"shape-geojson",label:"Export features → GeoJSON"}, {value:"json-pretty",label:"Pretty-print GeoJSON"}, {value:"json-min",label:"Minify GeoJSON"}, {value:"geojson-csv",label:"Feature properties + geometry → CSV"}].concat(common);
     if (kind === "mesh3d") return [{value:"mesh-stl",label:"3D model → STL mesh"}, {value:"mesh-obj",label:"3D model → OBJ mesh"}].concat(common);
+    if (kind === "pointcloud") return [{value:"points-csv",label:"Sample points → CSV"}, {value:"points-json",label:"Sample points → JSON"}, {value:"points-ply",label:"Sample points → PLY"}].concat(common);
     if (kind === "zip") return common;
     if (kind === "gzip") return [{value:"decompress",label:"Decompress GZIP"}].concat(common);
     return common;
@@ -1166,6 +1169,99 @@
     currentPreview={type:"geojson",value:data,text:JSON.stringify(data,null,2)};
     $("#viewerCopy").disabled=false;
   }
+  async function renderPointCloud(file, extension) {
+    const MAX_LAS_BYTES=50*1024*1024;
+    const MAX_RENDER_POINTS=200000;
+    const MAX_EXPORT_POINTS=100000;
+    if(file.size>MAX_LAS_BYTES)throw new Error("LAS/LAZ parsing is capped at 50 MB here because the reader expands point records into memory. Use PDAL or CloudCompare for larger point clouds.");
+    const [core,lasModule,THREE,ControlsModule]=await Promise.all([
+      importModule(MODULES.loadersCore),
+      importModule(MODULES.loadersLas),
+      importModule(MODULES.three),
+      importModule(MODULES.orbitControls)
+    ]);
+    if(typeof core.parse!=="function" || !lasModule.LASLoader)throw new Error("The LAS/LAZ reader did not expose the expected loaders.gl API.");
+    status("Reading point-cloud header and records…");
+    const buffer=await file.arrayBuffer();
+    const parsed=await core.parse(buffer,lasModule.LASLoader);
+    const positionAttribute=parsed && parsed.attributes && parsed.attributes.POSITION;
+    const positions=positionAttribute && (positionAttribute.value || positionAttribute);
+    if(!positions || positions.length<3 || positions.length%3!==0)throw new Error("LAS/LAZ reader did not return a usable XYZ point array.");
+    const totalPoints=Math.floor(positions.length/3);
+    const sampleCount=Math.min(totalPoints,MAX_EXPORT_POINTS);
+    const exportPoints=[];
+    const intensityAttr=parsed.attributes.intensity;
+    const intensityValues=intensityAttr && (intensityAttr.value || intensityAttr);
+    const classAttr=parsed.attributes.classification;
+    const classValues=classAttr && (classAttr.value || classAttr);
+    let minX=Infinity,minY=Infinity,minZ=Infinity,maxX=-Infinity,maxY=-Infinity,maxZ=-Infinity;
+    const stride=Math.max(1,Math.floor(totalPoints/sampleCount));
+    for(let i=0,n=0;i<totalPoints && n<sampleCount;i+=stride,n++){
+      const x=Number(positions[i*3]),y=Number(positions[i*3+1]),z=Number(positions[i*3+2]);
+      if(!Number.isFinite(x)||!Number.isFinite(y)||!Number.isFinite(z))continue;
+      minX=Math.min(minX,x);minY=Math.min(minY,y);minZ=Math.min(minZ,z);
+      maxX=Math.max(maxX,x);maxY=Math.max(maxY,y);maxZ=Math.max(maxZ,z);
+      exportPoints.push({
+        x:x,y:y,z:z,
+        intensity:intensityValues && intensityValues[i]!=null ? Number(intensityValues[i]) : null,
+        classification:classValues && classValues[i]!=null ? Number(classValues[i]) : null
+      });
+    }
+    if(!exportPoints.length)throw new Error("No finite XYZ point records could be read.");
+    const center=[(minX+maxX)/2,(minY+maxY)/2,(minZ+maxZ)/2];
+    const renderStride=Math.max(1,Math.ceil(totalPoints/MAX_RENDER_POINTS));
+    const renderCount=Math.ceil(totalPoints/renderStride);
+    const displayPositions=new Float32Array(renderCount*3);
+    const colors=new Float32Array(renderCount*3);
+    let rendered=0;
+    const minIntensity=exportPoints.reduce((m,p)=>p.intensity==null?m:Math.min(m,p.intensity),Infinity);
+    const maxIntensity=exportPoints.reduce((m,p)=>p.intensity==null?m:Math.max(m,p.intensity),-Infinity);
+    for(let i=0;i<totalPoints;i+=renderStride){
+      if(rendered>=renderCount)break;
+      const x=Number(positions[i*3])-center[0],y=Number(positions[i*3+1])-center[1],z=Number(positions[i*3+2])-center[2];
+      displayPositions[rendered*3]=x;displayPositions[rendered*3+1]=y;displayPositions[rendered*3+2]=z;
+      const intensity=intensityValues && intensityValues[i]!=null ? Number(intensityValues[i]) : null;
+      const ratio=intensity!=null && Number.isFinite(minIntensity) && maxIntensity>minIntensity ? Math.max(0,Math.min(1,(intensity-minIntensity)/(maxIntensity-minIntensity))) : Math.max(0,Math.min(1,(Number(positions[i*3+2])-minZ)/(maxZ-minZ||1)));
+      colors[rendered*3]=0.04+0.9*ratio;
+      colors[rendered*3+1]=0.42+0.22*(1-Math.abs(ratio-.5)*2);
+      colors[rendered*3+2]=0.62+0.15*(1-ratio);
+      rendered++;
+    }
+    addHeading("LAS / LAZ point-cloud viewer","Interactive XYZ preview powered by loaders.gl and Three.js. View colors emphasize intensity where it exists, otherwise height. Rendering and exports are deliberately sampled; coordinates are kept in source units, without reprojection.");
+    const wrap=document.createElement("div");wrap.className="viewer-3d-wrap";
+    const canvas=document.createElement("canvas");canvas.className="viewer-3d-canvas";wrap.append(canvas);stage().append(wrap);
+    const renderer=new THREE.WebGLRenderer({canvas:canvas,antialias:true,alpha:false,preserveDrawingBuffer:true});
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,1.5));renderer.setClearColor(0xf0f7f8,1);
+    const scene=new THREE.Scene();scene.background=new THREE.Color(0xf0f7f8);
+    const camera=new THREE.PerspectiveCamera(45,1,.01,1e12);
+    const geometry=new THREE.BufferGeometry();
+    geometry.setAttribute("position",new THREE.Float32BufferAttribute(displayPositions,3));
+    geometry.setAttribute("color",new THREE.Float32BufferAttribute(colors.subarray(0,rendered*3),3));
+    const points=new THREE.Points(geometry,new THREE.PointsMaterial({size:2.3,vertexColors:true,sizeAttenuation:false}));
+    scene.add(points);
+    const extent=Math.max(maxX-minX,maxY-minY,maxZ-minZ)||1;
+    camera.position.set(extent*1.45,extent*1.25,extent*2.4);
+    camera.near=Math.max(extent/1e7,.0001);camera.far=Math.max(extent*100,1000);camera.updateProjectionMatrix();
+    const controls=new ControlsModule.OrbitControls(camera,renderer.domElement);
+    controls.enableDamping=true;controls.target.set(0,0,0);
+    const render=()=>{
+      const w=Math.max(1,wrap.clientWidth-2),h=Math.max(240,Math.min(560,window.innerWidth<600?330:470));
+      renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();renderer.render(scene,camera);
+    };
+    controls.addEventListener("change",()=>renderer.render(scene,camera));
+    const resizeObserver=typeof ResizeObserver!=="undefined"?new ResizeObserver(render):null;if(resizeObserver)resizeObserver.observe(wrap);
+    render();
+    const header=parsed.header||{};
+    const bbox=Array.isArray(header.boundingBox)?header.boundingBox:[[minX,minY,minZ],[maxX,maxY,maxZ]];
+    metaStrip([["TOTAL POINTS",Number(totalPoints).toLocaleString()],["RENDERED",Number(rendered).toLocaleString()],["EXPORT SAMPLE",Number(exportPoints.length).toLocaleString()],["BOUNDS",bbox.map((row)=>row.map((n)=>Number(n).toPrecision(5)).join(", ")).join(" → ")]]);
+    addTable(exportPoints.slice(0,10).map((p)=>[p.x,p.y,p.z,p.intensity==null?"":p.intensity,p.classification==null?"":p.classification]),["X","Y","Z","Intensity","Class"],"First sample rows. CSV/JSON/PLY exports are sampled to at most "+MAX_EXPORT_POINTS.toLocaleString()+" points.");
+    if(totalPoints>rendered)addNotice("To protect browser memory, "+(totalPoints-rendered).toLocaleString()+" points were omitted from the WebGL display. The source file itself is unchanged.","warn");
+    if(totalPoints>exportPoints.length)addNotice("Export actions contain a distributed sample of "+exportPoints.length.toLocaleString()+" points, not the entire dataset.","warn");
+    currentPreview={type:"pointcloud",points:exportPoints,totalPoints:totalPoints,renderedPoints:rendered,bounds:bbox,version:header.version||null,pointFormat:header.pointFormatId||header.pointsFormatId||null,text:JSON.stringify({header:header,totalPoints:totalPoints,renderedPoints:rendered,exportSample:exportPoints.length},null,2)};
+    $("#viewerCopy").disabled=false;
+    setTargets(targetsFor(file,"pointcloud"));
+    activeViewerCleanup=()=>{if(resizeObserver)resizeObserver.disconnect();controls.dispose();renderer.dispose();renderer.forceContextLoss();geometry.dispose();points.material.dispose();scene.clear();};
+  }
   async function renderMesh3D(file, extension) {
     if(file.size>MAX_CONVERT_BYTES)throw new Error("3D mesh preview is limited to 100 MB in the browser.");
     const isCad=[".step",".stp",".iges",".igs",".brep",".brp"].includes(extension);
@@ -1405,6 +1501,8 @@
         kind="video";addHeading("Video player","Only codecs supported by this browser can play. The file is not transcoded in-place.");
         const video=document.createElement("video");video.controls=true;video.preload="metadata";video.src=newObjectUrl(file);video.className="viewer-media";stage().append(video);currentPreview={type:"video"};
         metaStrip([["FILE",file.name],["SIZE",formatBytes(file.size)],["PLAYBACK","Native browser video"]]);setTargets([{value:"report-json",label:"Export file report → JSON"},{value:"zip",label:"Create ZIP archive"}]);
+      } else if([".las",".laz"].includes(ext)) {
+        kind="pointcloud";await renderPointCloud(file,ext);
       } else if([".stl",".obj",".ply",".vtk",".3mf",".dae",".3ds",".wrl"].includes(ext)) {
         kind="mesh3d";setTargets(targetsFor(file,kind));await renderMesh3D(file,ext);
       } else if([".glb",".gltf"].includes(ext)) {
@@ -1559,6 +1657,24 @@
         const exported=target==="mesh-stl"?exporter.parse(currentPreview.object,{binary:true}):exporter.parse(currentPreview.object);
         blob=new Blob([exported],{type:target==="mesh-stl"?"model/stl":"text/plain;charset=utf-8"});
         name=file.name.replace(/\.[^.]+$/,"")+(target==="mesh-stl"?".stl":".obj");
+      } else if(["points-csv","points-json","points-ply"].includes(target)) {
+        const points=currentPreview.type==="pointcloud"?currentPreview.points:[];
+        if(!points.length)throw new Error("No point-cloud sample is available to export.");
+        if(target==="points-json") {
+          blob=new Blob([JSON.stringify({format:ext.replace(/^\./,""),sampleOnly:true,totalPoints:currentPreview.totalPoints,exportedPoints:points.length,bounds:currentPreview.bounds,points:points},null,2)],{type:"application/json;charset=utf-8"});
+          name=file.name.replace(/\.[^.]+$/,"")+".sample.json";
+        } else if(target==="points-ply") {
+          const lines=["ply","format ascii 1.0","comment SPACE point-cloud sample; not full source export","element vertex "+points.length,"property double x","property double y","property double z","property double intensity","property uchar classification","end_header"];
+          points.forEach((p)=>lines.push([p.x,p.y,p.z,p.intensity==null?0:p.intensity,p.classification==null?0:p.classification].join(" ")));
+          blob=new Blob([lines.join("\n")+"\n"],{type:"application/octet-stream"});
+          name=file.name.replace(/\.[^.]+$/,"")+".sample.ply";
+        } else {
+          await loadScript(LIB.papa,()=>!!window.Papa);
+          const fields=["x","y","z","intensity","classification"];
+          const content=window.Papa.unparse({fields,data:points.map((p)=>fields.map((field)=>p[field]==null?"":p[field]))},{newline:"\r\n"});
+          blob=new Blob([content],{type:"text/csv;charset=utf-8"});
+          name=file.name.replace(/\.[^.]+$/,"")+".sample.csv";
+        }
       } else if(["zarr-csv","zarr-json","zarr-xlsx"].includes(target)) {
         const rows=currentPreview.type==="zarr"?currentPreview.rows:[],fields=currentPreview.type==="zarr"?currentPreview.headers:[];
         if(!rows.length||!fields.length)throw new Error("No Zarr sample values are available to export.");

@@ -358,7 +358,7 @@
     ctx.putImageData(img,0,0);
     const wrap=document.createElement("div");wrap.className="viewer-image-frame";wrap.append(canvas);stage().append(wrap);
     currentPreview={type:"fits",canvas:canvas,text:details};
-    metaStrip([["PIXEL SCALE",String(min)+" → "+String(max)],["PREVIEW",outW+" × "+outH],["RENDER","Grayscale stretch"]);
+    metaStrip([["PIXEL SCALE",String(min)+" → "+String(max)],["PREVIEW",outW+" × "+outH],["RENDER","Grayscale stretch"]]);
     $("#viewerCopy").disabled=false;
   }
   async function renderGeoTiff(file) {

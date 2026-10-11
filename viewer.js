@@ -804,7 +804,7 @@
     let object;
     if(isCad) {
       await loadScript(LIB.occtJs,()=>typeof window.occtimportjs==="function");
-      const occt=await window.occtimportjs({locateFile:(path)=>path.endsWith(".wasm")?LIB.occtWasm:path});
+      const occt=await window.occtimportjs({locateFile:(path)=>path.endsWith(".wasm")?MODULES.occtWasm:path});
       const bytes=new Uint8Array(await file.arrayBuffer());
       const options={linearUnit:"millimeter",linearDeflectionType:"bounding_box_ratio",linearDeflection:0.001,angularDeflection:0.5};
       let imported;
@@ -866,7 +866,7 @@
   async function renderSQLite(file) {
     if(file.size>MAX_CONVERT_BYTES)throw new Error("SQLite preview is limited to 100 MB in the browser.");
     await loadScript(LIB.sqlJs,()=>typeof window.initSqlJs==="function");
-    const SQL=await window.initSqlJs({mainScriptUrlOrBlob:LIB.sqlJs,locateFile:(name)=>!name||name.endsWith(".wasm")?LIB.sqlWasm:name});
+    const SQL=await window.initSqlJs({mainScriptUrlOrBlob:LIB.sqlJs,locateFile:(name)=>!name||name.endsWith(".wasm")?MODULES.sqlWasm:name});
     const db=new SQL.Database(new Uint8Array(await file.arrayBuffer()));
     const tables=db.exec("SELECT name, type, sql FROM sqlite_master WHERE type IN ('table','view') AND name NOT LIKE 'sqlite_%' ORDER BY type, name")[0];
     const items=tables?tables.values.map((r)=>({name:String(r[0]),type:String(r[1]),sql:String(r[2]||"")})):[];

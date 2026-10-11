@@ -680,6 +680,57 @@
     addPre(JSON.stringify(info,null,2),"GEOREFERENCE METADATA");
     currentPreview={type:"tiff",canvas:canvas,metadata:info};
   }
+  function parseTarArchive(bytes) {
+    const entries={};
+    const readString=(offset,length)=>new TextDecoder("utf-8",{fatal:false}).decode(bytes.subarray(offset,offset+length)).replace(/\0.*$/s,"").trim();
+    const readOctal=(offset,length)=>{const raw=readString(offset,length).trim();if(!raw)return 0;const val=parseInt(raw.replace(/^\x00+/,""),8);return Number.isFinite(val)&&val>=0?val:0;};
+    let offset=0,longName="";
+    while(offset+512<=bytes.length){
+      const block=bytes.subarray(offset,offset+512);
+      if(block.every((value)=>value===0))break;
+      const name=readString(offset,100);
+      const prefix=readString(offset+345,155);
+      const fullName=(prefix?prefix+"/":"")+name;
+      const size=readOctal(offset+124,12);
+      const type=String.fromCharCode(bytes[offset+156]||48);
+      const start=offset+512;
+      if(size<0 || start+size>bytes.length)throw new Error("TAR entry size is invalid or the archive is truncated.");
+      if(type==="L")longName=new TextDecoder().decode(bytes.subarray(start,start+size)).replace(/\0.*$/s,"");
+      else if(type==="0"||type==="\0"||type==="7"){
+        const entryName=(longName||fullName).replace(/^\.\//,"");
+        longName="";
+        if(entryName && !entryName.endsWith("/"))entries[entryName]=bytes.slice(start,start+size);
+      }
+      const padded=Math.ceil(size/512)*512;
+      if(!Number.isSafeInteger(padded) || padded<0 || start+padded>bytes.length)break;
+      offset=start+padded;
+    }
+    return entries;
+  }
+  async function renderTarFile(file) {
+    if(file.size>MAX_CONVERT_BYTES)throw new Error("TAR archive preview is limited to 100 MB in the browser.");
+    let bytes=new Uint8Array(await file.arrayBuffer());
+    if(/\.tar\.gz$/i.test(file.name)||/\.tgz$/i.test(file.name)){
+      await loadScript(LIB.fflate,()=>!!window.fflate);
+      bytes=window.fflate.gunzipSync(bytes);
+    }
+    const entries=parseTarArchive(bytes),names=Object.keys(entries);
+    addHeading("TAR / TAR.GZ archive viewer","Shows regular files in a local TAR archive; compressed .tar.gz and .tgz files are expanded in memory. PAX metadata, sparse files and uncommon extensions may be skipped.");
+    metaStrip([["ENTRIES",String(names.length)],["ARCHIVE SIZE",formatBytes(file.size)],["EXPANDED",formatBytes(bytes.byteLength)]]);
+    addTable(names.slice(0,1000).map((name)=>[name,formatBytes(entries[name].byteLength),entries[name].byteLength]),["Entry path","Expanded size","Bytes"],names.length>1000?"First 1,000 entries shown.":"Regular files only.");
+    const list=document.createElement("div");list.className="viewer-archive-list";
+    names.slice(0,500).forEach((name)=>{
+      const row=document.createElement("div");row.className="viewer-archive-item";
+      const title=document.createElement("span");title.textContent=name;
+      const info=document.createElement("small");info.textContent=formatBytes(entries[name].byteLength);
+      const btn=document.createElement("button");btn.className="btn small";btn.textContent="Extract";
+      btn.onclick=()=>downloadBlob(new Blob([entries[name]]),name.split("/").pop()||"extracted.bin");
+      row.append(title,info,btn);list.append(row);
+    });
+    stage().append(list);
+    currentPreview={type:"tar",entries:entries,text:JSON.stringify(names,null,2)};
+    setTargets([{value:"report-json",label:"Export archive inventory → JSON"},{value:"zip",label:"Wrap original archive in ZIP"}]);
+  }
   async function renderArchive(file) {
     if(file.size>MAX_CONVERT_BYTES) throw new Error("Archive is over the 100 MB browser extraction limit; use a desktop archive tool for larger data.");
     await loadScript(LIB.fflate,()=>!!window.fflate);
@@ -957,6 +1008,8 @@
         kind="yaml";setTargets(targetsFor(file,kind));await renderYaml(file);
       } else if([".xml",".gml",".kml",".gpx",".lbl.xml",".votable.xml",".vot",".pvl"].includes(ext)) {
         kind="xml";setTargets(targetsFor(file,kind));await renderXml(file);
+      } else if(ext===".tar" || ext===".tar.gz" || /\.tgz$/i.test(file.name)) {
+        kind="tar";await renderTarFile(file);
       } else if([".zip",".kmz"].includes(ext) || ext===".gz" || /\.gz$/i.test(file.name)) {
         kind=ext===".gz"?"gzip":"zip";await renderArchive(file);
       } else if([".mp3",".wav",".ogg",".flac",".m4a",".aac"].includes(ext) || (file.type&&file.type.startsWith("audio/"))) {

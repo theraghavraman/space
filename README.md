@@ -5,6 +5,8 @@
 ## Features
 
 - **Format Atlas:** 59 grouped format records and 143 distinct extension / protocol / national-standard labels across astronomy, planetary science, Earth observation, telemetry, SPICE, geospatial science, scientific computing and aerospace engineering.
+- **Universal File Viewer:** routes files to native image/audio/video previews, a PDF.js page viewer, CSV/TSV tables, JSON/XML/YAML viewers, SheetJS workbook preview, GeoTIFF raster rendering, FITS primary-image/header preview, GLB/glTF model viewing, ZIP/GZIP inspection and a generic hex/signature viewer for specialist science binaries.
+- **Browser Converter:** image re-encoding (PNG/JPEG/WebP), PDF page-to-image export, CSV/TSV/JSON table transforms, JSON formatting/minification, YAML ↔ JSON, simple XML ↔ JSON, selected spreadsheet-sheet exports, GZIP decompression and ZIP packaging. Export options are specific to the detected file type.
 - **Local File Inspector:** basic signature clues, limited JSON/XML checks and SHA-256 checksums for reasonably sized files. Files are not uploaded by this inspector.
 - **Mission Data Finder:** live browser-based searches against the documented public NASA Common Metadata Repository (CMR), Copernicus Data Space STAC catalogue and EUMETSAT collection browse API.
 - **Direct File Fetch:** download a URL supplied by the user through the browser if the HTTPS source allows CORS. The browser cannot bypass account requirements or cross-origin restrictions.
@@ -19,7 +21,7 @@
 4. Choose branch `main` and folder `/ (root)`.
 5. Save, wait for the GitHub Pages deployment, and open the site URL shown by GitHub.
 
-This is a static website. The root `index.html` loads `app.js` and the JSON registries in `data/`; the favicon is `assets/space.svg`.
+This is a static website. The root `index.html` loads `app.js`, `viewer.js` and the JSON registries in `data/`; the favicon is `assets/space.svg`. The design uses a soft light mist-blue/sage theme rather than a dark dashboard.
 
 ## Live APIs and access boundaries
 
@@ -40,9 +42,15 @@ The inspector is **not** a general-purpose certified validator. It checks select
 
 A detected extension or magic signature is not proof of file integrity, standards compliance, calibration or scientific correctness.
 
+## Viewer and conversion boundaries
+
+The viewer offers a format-aware route for every entry in the format registry. That does **not** mean every proprietary, mission-specific or scientific binary has a universal in-browser decoder. When a full reader is not integrated, SPACE shows a safe signature/hex window, explains the limitation and points to the dedicated upstream reader or validator. Current scientific previews are deliberately scoped: FITS rendering handles an uncompressed primary 2-D image plane; GeoTIFF uses a downsampled contrast-stretched display; PDF export rasterizes the current page; workbook exports use selected-sheet display values and do not preserve workbook styling, macros or formula fidelity. These previews must not be substituted for scientific analysis, validated data conversion or official compliance checks.
+
+The browser viewer and converter process the chosen file locally. The page fetches third-party JavaScript libraries from their published CDNs as needed; the selected file is not sent to those CDNs by the SPACE code. The browser may still make ordinary requests to the website/CDN, and provider APIs are contacted only when the matching catalogue search is initiated. Keep the site online and use a modern browser for dynamic library loading. Files larger than the documented safety limits should be processed with specialist desktop tools instead of being forced into browser memory.
+
 ## Reusing tools and data
 
-The website links to upstream programs, APIs and documentation rather than copying closed implementations. Before incorporating upstream code into SPACE, review its current LICENSE file, dependencies, attribution and redistribution conditions. Data licenses and software licenses are separate; follow the selected provider's data-use terms, rate limits, login requirements and attribution conditions.
+SPACE integrates documented browser libraries from their published CDN builds rather than copying proprietary implementations: Mozilla PDF.js (Apache-2.0), Papa Parse (MIT), SheetJS Community Edition (Apache-2.0), GeoTIFF.js (MIT), js-yaml (MIT), fflate (MIT), Google model-viewer (Apache-2.0), and the astrojs/fitsjs project (MIT). Their official repositories and license notes are listed in the Tool Locker and `data/tools.json`. Libraries are loaded on demand for selected file types. Review each upstream license and deployment policy before self-hosting or bundling them; pinned CDN URLs reduce unexpected major-version changes but do not remove supply-chain risk. Data licenses and software licenses are separate; follow provider terms, rate limits, login requirements and attribution conditions.
 
 ## Local development
 

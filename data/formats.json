@@ -604,7 +604,8 @@
     "id": "spice-dsk",
     "name": "SPICE digital shape kernel",
     "extensions": [
-      ".dsk"
+      ".dsk",
+      ".bds"
     ],
     "group": "SPICE navigation & geometry",
     "kind": "file",

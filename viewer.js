@@ -15,6 +15,8 @@
   const MAX_CONVERT_BYTES = 100 * 1024 * 1024;
   const MAX_TABLE_ROWS = 250;
   const MAX_NDJSON_ROWS = 100000;
+  const MAX_ARCHIVE_EXPANDED_BYTES = 200 * 1024 * 1024;
+  const MAX_ARCHIVE_ENTRIES = 10000;
   const libs = {};
   let activeFile = null, currentPreview = {}, activeUrl = "", activeArchive = null, activeDecompressedBytes = null, activeViewerCleanup = null, activeFormatRecord = null;
   let formatRegistryPromise = null;
@@ -858,6 +860,61 @@
     addPre(JSON.stringify(info,null,2),"GEOREFERENCE METADATA");
     currentPreview={type:"tiff",canvas:canvas,metadata:info};
   }
+  function inspectZipCentralDirectory(bytes) {
+    const u16=(offset)=>bytes[offset] | (bytes[offset+1] << 8);
+    const u32=(offset)=>(bytes[offset] | (bytes[offset+1]<<8) | (bytes[offset+2]<<16) | (bytes[offset+3]<<24)) >>> 0;
+    if(bytes.length<22)throw new Error("ZIP archive is too short to contain a central directory.");
+    let eocd=-1;
+    const lower=Math.max(0,bytes.length-65557);
+    for(let i=bytes.length-22;i>=lower;i--) {
+      if(u32(i)===0x06054b50 && i+22+u16(i+20)<=bytes.length){eocd=i;break;}
+    }
+    if(eocd<0)throw new Error("ZIP end-of-central-directory record was not found. ZIP64 and self-extracting variants may require a desktop archive utility.");
+    if(u16(eocd+4)!==0 || u16(eocd+6)!==0)throw new Error("Multi-disk ZIP archives are not supported in the browser.");
+    const diskEntries=u16(eocd+8),entryCount=u16(eocd+10),directorySize=u32(eocd+12),directoryOffset=u32(eocd+16);
+    if(entryCount===0xffff||diskEntries===0xffff||directorySize===0xffffffff||directoryOffset===0xffffffff)throw new Error("ZIP64 archives are not supported by this bounded browser extractor yet.");
+    if(entryCount>MAX_ARCHIVE_ENTRIES)throw new Error("Archive contains more than "+MAX_ARCHIVE_ENTRIES+" entries. Use a desktop archive utility for very large packages.");
+    if(directoryOffset+directorySize>eocd || directoryOffset+directorySize>bytes.length)throw new Error("ZIP central directory size or offset is invalid.");
+    let offset=directoryOffset,totalExpanded=0,totalCompressed=0;
+    for(let i=0;i<entryCount;i++){
+      if(offset+46>bytes.length || u32(offset)!==0x02014b50)throw new Error("ZIP central directory entry is malformed or truncated.");
+      const flags=u16(offset+8),compressed=u32(offset+20),expanded=u32(offset+24);
+      const nameLength=u16(offset+28),extraLength=u16(offset+30),commentLength=u16(offset+32);
+      if(flags&1)throw new Error("Encrypted ZIP entries are not supported by this browser reader.");
+      if(compressed===0xffffffff||expanded===0xffffffff)throw new Error("ZIP64 entry sizes are not supported in this browser.");
+      totalExpanded+=expanded;totalCompressed+=compressed;
+      if(totalExpanded>MAX_ARCHIVE_EXPANDED_BYTES)throw new Error("Archive expands beyond the "+formatBytes(MAX_ARCHIVE_EXPANDED_BYTES)+" browser safety limit. Extract it with a desktop archive utility.");
+      offset+=46+nameLength+extraLength+commentLength;
+      if(offset>directoryOffset+directorySize || offset>bytes.length)throw new Error("ZIP directory entry extends outside the declared central directory.");
+    }
+    return {entryCount:entryCount,compressedBytes:totalCompressed,expandedBytes:totalExpanded};
+  }
+  async function gunzipBounded(bytes, maxBytes=MAX_ARCHIVE_EXPANDED_BYTES) {
+    return new Promise((resolve,reject)=>{
+      const chunks=[];let total=0,settled=false,stream=null;
+      const finishError=(error)=>{if(settled)return;settled=true;clearTimeout(timer);try{stream&&stream.terminate();}catch(_){}reject(error);};
+      const timer=setTimeout(()=>finishError(new Error("GZIP decompression timed out. Use a local archive tool for this payload.")),45000);
+      try {
+        stream=new window.fflate.Gunzip((chunk,final)=>{
+          if(settled)return;
+          total+=chunk.byteLength;
+          if(total>maxBytes){finishError(new Error("Expanded data exceeds the "+formatBytes(maxBytes)+" browser safety limit."));return;}
+          chunks.push(chunk);
+          if(final){
+            settled=true;clearTimeout(timer);
+            const result=new Uint8Array(total);let offset=0;
+            chunks.forEach((part)=>{result.set(part,offset);offset+=part.byteLength;});
+            resolve(result);
+          }
+        });
+        const blockSize=16*1024;
+        for(let offset=0;offset<bytes.length && !settled;offset+=blockSize) {
+          const end=Math.min(bytes.length,offset+blockSize);
+          stream.push(bytes.subarray(offset,end),end===bytes.length);
+        }
+      } catch(err) {finishError(err);}
+    });
+  }
   function parseTarArchive(bytes) {
     const entries={};
     const readString=(offset,length)=>new TextDecoder("utf-8",{fatal:false}).decode(bytes.subarray(offset,offset+length)).replace(/\0.*$/s,"").trim();
@@ -890,7 +947,7 @@
     let bytes=new Uint8Array(await file.arrayBuffer());
     if(/\.tar\.gz$/i.test(file.name)||/\.tgz$/i.test(file.name)){
       await loadScript(LIB.fflate,()=>!!window.fflate);
-      bytes=window.fflate.gunzipSync(bytes);
+      bytes=await gunzipBounded(bytes);
     }
     const entries=parseTarArchive(bytes),names=Object.keys(entries);
     addHeading("TAR / TAR.GZ archive viewer","Shows regular files in a local TAR archive; compressed .tar.gz and .tgz files are expanded in memory. PAX metadata, sparse files and uncommon extensions may be skipped.");
@@ -979,9 +1036,9 @@
   }
   async function renderArchive(file) {
     if(file.size>MAX_CONVERT_BYTES) throw new Error("Archive is over the 100 MB browser extraction limit; use a desktop archive tool for larger data.");
-    await loadScript(LIB.fflate,()=>!!window.fflate);
-    const bytes=new Uint8Array(await file.arrayBuffer());
     const ext=extOf(file);
+    if(ext!==".bz2")await loadScript(LIB.fflate,()=>!!window.fflate);
+    const bytes=new Uint8Array(await file.arrayBuffer());
     let entries;
     if(ext===".bz2") {
       await loadScript(LIB.bz2,()=>!!window.bz2 && typeof window.bz2.decompress==="function");
@@ -996,7 +1053,7 @@
       return;
     }
     if(ext===".gz" || /\.gz$/i.test(file.name)) {
-      const output=window.fflate.gunzipSync(bytes);activeDecompressedBytes=output;
+      const output=await gunzipBounded(bytes);activeDecompressedBytes=output;
       addHeading("GZIP inspector","The compressed payload has been decompressed locally in memory. Use the download button to save it separately.");
       metaStrip([["COMPRESSED",formatBytes(file.size)],["EXPANDED",formatBytes(output.byteLength)],["TYPE","GZIP stream"]]);
       const preview=output.subarray(0,Math.min(output.length,2*1024*1024));
@@ -1006,12 +1063,13 @@
       const btn=document.createElement("button");btn.className="btn small";btn.textContent="Download decompressed file";btn.onclick=()=>downloadBlob(new Blob([output]),file.name.replace(/\.gz$/i,"")||"decompressed.bin");stage().append(btn);
       return;
     }
+    const archiveStats=inspectZipCentralDirectory(bytes);
     entries=window.fflate.unzipSync(bytes);activeArchive=entries;
     const names=Object.keys(entries);
     const hasZarrMetadata=names.some((name)=>/(^|\/)(\.zarray|zarr\.json)$/.test(name));
     if(hasZarrMetadata) {
       await renderZarrArchive(entries,file);
-      addNotice("Zarr archive remains unchanged. Exports refer only to the displayed sample slice, not the complete multidimensional store.","warn");
+      addNotice("Zarr archive preflight counted "+archiveStats.entryCount+" entries and "+formatBytes(archiveStats.expandedBytes)+" uncompressed. Exports refer only to the displayed sample slice, not the complete multidimensional store.","warn");
       return;
     }
     const kmlName=names.find((name)=>/\.kml$/i.test(name));
@@ -1019,7 +1077,7 @@
       const kmlFile=new File([entries[kmlName]],kmlName,{type:"application/vnd.google-earth.kml+xml"});
       activeFormatRecord=await findFormatRecord(kmlFile);
       await renderKmlOrGpx(kmlFile);
-      addNotice("KMZ archive parsed locally: "+kmlName+". Other archive entries remain available in the original download; this preview focuses on the first KML document.","success");
+      addNotice("KMZ archive parsed locally: "+kmlName+". Archive preflight counted "+archiveStats.entryCount+" entries and "+formatBytes(archiveStats.expandedBytes)+" uncompressed. Other archive entries remain in the original download.","success");
       return;
     }
     if(names.some((name)=>/\.shp$/i.test(name))) {
@@ -1037,13 +1095,13 @@
       const geoFile=new File([JSON.stringify(geo)],file.name.replace(/\.zip$/i,"")+".geojson",{type:"application/geo+json"});
       activeFormatRecord=await findFormatRecord(geoFile);
       await renderGeoJSON(geoFile);
-      addNotice("Shapefile archive parsed locally: "+layers.length+" layer(s), "+features.length+" feature(s). Attribute schemas, CRS/projection and topology should still be checked in a GIS.","success");
+      addNotice("Shapefile archive parsed locally: "+layers.length+" layer(s), "+features.length+" feature(s). ZIP preflight counted "+archiveStats.entryCount+" entries and "+formatBytes(archiveStats.expandedBytes)+" uncompressed. Attribute schemas, CRS/projection and topology should still be checked in a GIS.","success");
       currentPreview={type:"geojson",value:geo,text:JSON.stringify(geo,null,2)};
       setTargets([{value:"shape-geojson",label:"Export features → GeoJSON"},{value:"geojson-csv",label:"Feature properties + geometry → CSV"},{value:"report-json",label:"Export file report → JSON"},{value:"zip",label:"Create ZIP archive"}]);
       return;
     }
     addHeading("ZIP archive browser","Archive entries are listed locally. Extraction uses the original entry bytes; no server upload is performed.");
-    metaStrip([["ENTRIES",String(names.length)],["ARCHIVE SIZE",formatBytes(file.size)],["EXTRACTION","Local only"]]);
+    metaStrip([["ENTRIES",String(names.length)],["ARCHIVE SIZE",formatBytes(file.size)],["EXPANDED",formatBytes(archiveStats.expandedBytes)],["EXTRACTION","Local only"]]);
     const rows=names.slice(0,1000).map((name)=>[name,formatBytes(entries[name].byteLength),entries[name].byteLength]);
     addTable(rows,["Entry path","Expanded size","Bytes"],names.length>1000?"First 1,000 entries shown.":"Archive entry listing.");
     const list=document.createElement("div");list.className="viewer-archive-list";

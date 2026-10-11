@@ -32,7 +32,7 @@
     const m = name.match(/(\.[a-z0-9][a-z0-9._-]*)$/);
     if (!m) return "";
     const ext = m[1];
-    const known = [".nii.gz",".fits.gz",".tar.gz",".nc4",".hdf5",".geojson",".shp.xml",".votable.xml",".jsonl",".ndjson",".fits.fz",".fits"," .jpeg".trim(),".tiff",".jp2",".jpeg2000",".glb",".gltf",".parquet",".feather",".arrow",".sqlite",".gpkg",".grib2",".grb2",".grib",".grb",".tsv",".csv",".json",".xml",".yaml",".yml",".pdf",".xlsx",".xlsm",".xlsb",".xlsx",".xls",".ods",".zip",".gz",".las",".laz",".e57",".png",".jpg",".webp",".gif",".bmp",".avif",".svg",".mp4",".mov",".webm",".mkv",".mp3",".wav",".ogg",".flac",".fits",".nc",".cdf",".h5",".hdf",".fits",".bsp",".spk",".ck",".pck",".dsk",".vot",".kml",".kmz",".gpx",".pcap",".log",".txt",".md",".yaml",".yml",".stl",".obj",".3mf",".step",".stp",".iges",".vtk",".vtp",".pds",".lbl",".img",".bin",".dat",".ipynb",".py",".sql"];
+    const known = [".nii.gz",".fits.gz",".tar.gz",".nc4",".hdf5",".geojson",".shp.xml",".votable.xml",".jsonl",".ndjson",".fits.fz",".fits"," .jpeg".trim(),".tiff",".jp2",".jpeg2000",".glb",".gltf",".parquet",".feather",".arrow",".sqlite",".gpkg",".grib2",".grb2",".grib",".grb",".tsv",".csv",".json",".xml",".yaml",".yml",".pdf",".xlsx",".xlsm",".xlsb",".xlsx",".xls",".ods",".zip",".bz2",".gz",".las",".laz",".e57",".png",".jpg",".webp",".gif",".bmp",".avif",".svg",".mp4",".mov",".webm",".mkv",".mp3",".wav",".ogg",".flac",".fits",".nc",".cdf",".h5",".hdf",".fits",".bsp",".spk",".ck",".pck",".dsk",".vot",".kml",".kmz",".gpx",".pcap",".log",".txt",".md",".yaml",".yml",".stl",".obj",".3mf",".step",".stp",".iges",".vtk",".vtp",".pds",".lbl",".img",".bin",".dat",".ipynb",".py",".sql"];
     known.sort((a,b)=>b.length-a.length);
     return known.find((e)=>name.endsWith(e)) || ext;
   }

@@ -75,7 +75,8 @@
     stlExporter: "https://esm.sh/three@0.180.0/examples/jsm/exporters/STLExporter.js",
     objExporter: "https://esm.sh/three@0.180.0/examples/jsm/exporters/OBJExporter.js",
     occtJs: "https://cdn.jsdelivr.net/npm/occt-import-js@0.0.23/dist/occt-import-js.js",
-    occtWasm: "https://cdn.jsdelivr.net/npm/occt-import-js@0.0.23/dist/occt-import-js.wasm"
+    occtWasm: "https://cdn.jsdelivr.net/npm/occt-import-js@0.0.23/dist/occt-import-js.wasm",
+    shpJs: "https://unpkg.com/shpjs@4.0.4/dist/shp.js"
   };
   const modulePromises = {};
   async function importModule(url) {
@@ -90,7 +91,8 @@
     [LIB.fflate]:"sha384-DT0Ls0mO7JmjTnT+oBuMhEJzYJO1zUqzuuMXNdnOmOQRIpN2BgSjvBV/j50NngIT",
     [LIB.geotiff]:"sha384-m5adk5PRgt3JjiYbYoG8oXxc3EgRFKc1aCBgKzyxqxnbYpdiAMlHkR0gVDp03Q/H",
     [LIB.modelViewer]:"sha384-sr9b4Ux0WhAUGclJ0ym0FSY2zSOMmNSn0bP/SA0e6bNCrpn/5W3QL8mm+LdlQMKw",
-    [LIB.occtJs]:"sha384-Z8pO9JEhFZF+mvDKxMuLvPT85VP7nly8CqYjBatl0bMeW9OsaKCes4gEUPL4nihc"
+    [LIB.occtJs]:"sha384-Z8pO9JEhFZF+mvDKxMuLvPT85VP7nly8CqYjBatl0bMeW9OsaKCes4gEUPL4nihc",
+    [LIB.shpJs]:"sha384-SvGz+Dog2fS8fxYIE3uf8dViVamrK+czJkTku+kw1+N5jqZULpRyEpT1JqF0PaWh"
   };
   function clearStage() {
     if (typeof activeViewerCleanup === "function") { try { activeViewerCleanup(); } catch (_) {} activeViewerCleanup = null; }
@@ -201,7 +203,7 @@
     if (kind === "xml") return [{value:"json",label:"XML → JSON (simple documents)"}, {value:"xml",label:"Normalize XML"}].concat(common);
     if (kind === "workbook") return [{value:"csv",label:"Selected sheet → CSV"}, {value:"tsv",label:"Selected sheet → TSV"}, {value:"json",label:"Selected sheet → JSON"}].concat(common);
     if (kind === "parquet") return [{value:"csv",label:"Preview rows → CSV"}, {value:"tsv",label:"Preview rows → TSV"}, {value:"json",label:"Preview rows → JSON"}].concat(common);
-    if (kind === "geojson") return [{value:"json-pretty",label:"Pretty-print GeoJSON"}, {value:"json-min",label:"Minify GeoJSON"}, {value:"geojson-csv",label:"Feature properties + geometry → CSV"}].concat(common);
+    if (kind === "geojson") return [{value:"shape-geojson",label:"Export features → GeoJSON"}, {value:"json-pretty",label:"Pretty-print GeoJSON"}, {value:"json-min",label:"Minify GeoJSON"}, {value:"geojson-csv",label:"Feature properties + geometry → CSV"}].concat(common);
     if (kind === "mesh3d") return [{value:"mesh-stl",label:"3D model → STL mesh"}, {value:"mesh-obj",label:"3D model → OBJ mesh"}].concat(common);
     if (kind === "zip") return common;
     if (kind === "gzip") return [{value:"decompress",label:"Decompress GZIP"}].concat(common);
@@ -629,8 +631,27 @@
       return;
     }
     entries=window.fflate.unzipSync(bytes);activeArchive=entries;
-    addHeading("ZIP archive browser","Archive entries are listed locally. Extraction uses the original entry bytes; no server upload is performed.");
     const names=Object.keys(entries);
+    if(names.some((name)=>/\.shp$/i.test(name))) {
+      await loadScript(LIB.shpJs,()=>typeof window.shp==="function");
+      addHeading("Shapefile / ZIP geospatial viewer","Reading a local ZIP that contains one or more .shp layers with shpjs. CRS files are preserved in the input package; coordinates are displayed as delivered and are not reprojected.");
+      const decoded=await window.shp(bytes.buffer);
+      const layers=(Array.isArray(decoded)?decoded:[decoded]).filter(Boolean);
+      const features=[];
+      layers.forEach((layer)=>{
+        if(layer.type==="FeatureCollection")features.push(...(layer.features||[]).map((feature)=>Object.assign({},feature,{properties:Object.assign({__layer:layer.fileName||"layer"},feature.properties||{})})));
+        else if(layer.type==="Feature")features.push(Object.assign({},layer,{properties:layer.properties||{}}));
+      });
+      if(!features.length)throw new Error("SHP entries were present but no features could be decoded from this ZIP.");
+      const geo={type:"FeatureCollection",features:features};
+      const geoFile=new File([JSON.stringify(geo)],file.name.replace(/\.zip$/i,"")+".geojson",{type:"application/geo+json"});
+      await renderGeoJSON(geoFile);
+      addNotice("Shapefile archive parsed locally: "+layers.length+" layer(s), "+features.length+" feature(s). Attribute schemas, CRS/projection and topology should still be checked in a GIS.","success");
+      currentPreview={type:"geojson",value:geo,text:JSON.stringify(geo,null,2)};
+      setTargets([{value:"shape-geojson",label:"Export features → GeoJSON"},{value:"geojson-csv",label:"Feature properties + geometry → CSV"},{value:"report-json",label:"Export file report → JSON"},{value:"zip",label:"Create ZIP archive"}]);
+      return;
+    }
+    addHeading("ZIP archive browser","Archive entries are listed locally. Extraction uses the original entry bytes; no server upload is performed.");
     metaStrip([["ENTRIES",String(names.length)],["ARCHIVE SIZE",formatBytes(file.size)],["EXTRACTION","Local only"]]);
     const rows=names.slice(0,1000).map((name)=>[name,formatBytes(entries[name].byteLength),entries[name].byteLength]);
     addTable(rows,["Entry path","Expanded size","Bytes"],names.length>1000?"First 1,000 entries shown.":"Archive entry listing.");
@@ -968,8 +989,13 @@
         const exported=target==="mesh-stl"?exporter.parse(currentPreview.object,{binary:true}):exporter.parse(currentPreview.object);
         blob=new Blob([exported],{type:target==="mesh-stl"?"model/stl":"text/plain;charset=utf-8"});
         name=file.name.replace(/\.[^.]+$/,"")+(target==="mesh-stl"?".stl":".obj");
+      } else if(target==="shape-geojson") {
+        const data=currentPreview.value;
+        if(!data || !["FeatureCollection","Feature"].includes(data.type))throw new Error("Load a GeoJSON file or a ZIP containing a shapefile first.");
+        blob=new Blob([JSON.stringify(data,null,2)],{type:"application/geo+json;charset=utf-8"});
+        name=file.name.replace(/\.zip$/i,"").replace(/\.[^.]+$/,"")+".geojson";
       } else if(target==="geojson-csv") {
-        const parsed=JSON.parse(await file.text());
+        const parsed=currentPreview.type==="geojson" && currentPreview.value ? currentPreview.value : JSON.parse(await file.text());
         const features=parsed.type==="FeatureCollection"?(parsed.features||[]):parsed.type==="Feature"?[parsed]:[];
         const rows=features.map((feature)=>Object.assign({geometry:JSON.stringify(feature.geometry||null)},feature.properties||{}));
         if(!rows.length)throw new Error("No GeoJSON features were available to export.");

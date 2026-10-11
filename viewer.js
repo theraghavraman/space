@@ -76,6 +76,10 @@
     stlLoader: "https://esm.sh/three@0.180.0/examples/jsm/loaders/STLLoader.js",
     objLoader: "https://esm.sh/three@0.180.0/examples/jsm/loaders/OBJLoader.js",
     plyLoader: "https://esm.sh/three@0.180.0/examples/jsm/loaders/PLYLoader.js",
+    threeMFLoader: "https://esm.sh/three@0.180.0/examples/jsm/loaders/3MFLoader.js",
+    colladaLoader: "https://esm.sh/three@0.180.0/examples/jsm/loaders/ColladaLoader.js",
+    tdsLoader: "https://esm.sh/three@0.180.0/examples/jsm/loaders/TDSLoader.js",
+    vrmlLoader: "https://esm.sh/three@0.180.0/examples/jsm/loaders/VRMLLoader.js",
     orbitControls: "https://esm.sh/three@0.180.0/examples/jsm/controls/OrbitControls.js",
     stlExporter: "https://esm.sh/three@0.180.0/examples/jsm/exporters/STLExporter.js",
     objExporter: "https://esm.sh/three@0.180.0/examples/jsm/exporters/OBJExporter.js",
@@ -838,10 +842,10 @@
     const [THREE,ControlsModule,LoaderModule]=await Promise.all([
       importModule(MODULES.three),
       importModule(MODULES.orbitControls),
-      isCad ? Promise.resolve(null) : importModule(extension===".stl"?MODULES.stlLoader:extension===".ply"?MODULES.plyLoader:MODULES.objLoader)
+      isCad ? Promise.resolve(null) : importModule(extension===".stl"?MODULES.stlLoader:extension===".ply"?MODULES.plyLoader:extension===".3mf"?MODULES.threeMFLoader:extension===".dae"?MODULES.colladaLoader:extension===".3ds"?MODULES.tdsLoader:extension===".wrl"?MODULES.vrmlLoader:MODULES.objLoader)
     ]);
     const controlsClass=ControlsModule.OrbitControls;
-    const loader=extension===".stl"?new LoaderModule.STLLoader():extension===".ply"?new LoaderModule.PLYLoader():new LoaderModule.OBJLoader();
+    const loader=extension===".stl"?new LoaderModule.STLLoader():extension===".ply"?new LoaderModule.PLYLoader():extension===".3mf"?new LoaderModule.ThreeMFLoader():extension===".dae"?new LoaderModule.ColladaLoader():extension===".3ds"?new LoaderModule.TDSLoader():extension===".wrl"?new LoaderModule.VRMLLoader():new LoaderModule.OBJLoader();
     addHeading("Interactive 3D model viewer",isCad?"OpenCascade WebAssembly triangulation for STEP/IGES/BREP (millimetre output). The tessellated preview is not an authoritative CAD model; features, constraints, PMI and exact surfaces are not preserved in mesh exports.":"Drag to orbit, scroll or pinch to zoom. This is a geometry preview; engineering dimensions and topology should be checked in a dedicated CAD/mesh tool.");
     const wrap=document.createElement("div");wrap.className="viewer-3d-wrap";
     const canvas=document.createElement("canvas");canvas.className="viewer-3d-canvas";wrap.append(canvas);stage().append(wrap);
@@ -876,8 +880,13 @@
         object.add(new THREE.Mesh(geometry,new THREE.MeshStandardMaterial({color:color,metalness:.1,roughness:.5,side:THREE.DoubleSide})));
       });
       if(!object.children.length)throw new Error("CAD import returned no renderable mesh surfaces.");
-    } else if(extension===".obj") object=loader.parse(await file.text());
-    else {
+    } else if([".obj",".dae",".wrl"].includes(extension)) {
+      const parsed=loader.parse(await file.text(),extension===".dae"?"":undefined);
+      object=parsed.scene||parsed;
+    } else if([".3mf",".3ds"].includes(extension)) {
+      const parsed=loader.parse(await file.arrayBuffer());
+      object=parsed.scene||parsed;
+    } else {
       const geometry=loader.parse(await file.arrayBuffer());
       if(!geometry.attributes.normal)geometry.computeVertexNormals();
       const hasColor=!!geometry.attributes.color;
@@ -1020,7 +1029,7 @@
         kind="video";addHeading("Video player","Only codecs supported by this browser can play. The file is not transcoded in-place.");
         const video=document.createElement("video");video.controls=true;video.preload="metadata";video.src=newObjectUrl(file);video.className="viewer-media";stage().append(video);currentPreview={type:"video"};
         metaStrip([["FILE",file.name],["SIZE",formatBytes(file.size)],["PLAYBACK","Native browser video"]]);setTargets([{value:"report-json",label:"Export file report → JSON"},{value:"zip",label:"Create ZIP archive"}]);
-      } else if([".stl",".obj",".ply"].includes(ext)) {
+      } else if([".stl",".obj",".ply",".3mf",".dae",".3ds",".wrl"].includes(ext)) {
         kind="mesh3d";setTargets(targetsFor(file,kind));await renderMesh3D(file,ext);
       } else if([".glb",".gltf"].includes(ext)) {
         kind="model";await renderModel(file);setTargets([{value:"report-json",label:"Export file report → JSON"},{value:"zip",label:"Create ZIP archive"}]);

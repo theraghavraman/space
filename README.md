@@ -4,7 +4,7 @@
 
 ## Features
 
-- **Format Atlas:** 54 grouped format records and 124 distinct extension / protocol labels across astronomy, planetary science, Earth observation, telemetry, SPICE, geospatial science, scientific computing and aerospace engineering.
+- **Format Atlas:** 59 grouped format records and 143 distinct extension / protocol / national-standard labels across astronomy, planetary science, Earth observation, telemetry, SPICE, geospatial science, scientific computing and aerospace engineering.
 - **Local File Inspector:** basic signature clues, limited JSON/XML checks and SHA-256 checksums for reasonably sized files. Files are not uploaded by this inspector.
 - **Mission Data Finder:** live browser-based searches against the documented public NASA Common Metadata Repository (CMR), Copernicus Data Space STAC catalogue and EUMETSAT collection browse API.
 - **Direct File Fetch:** download a URL supplied by the user through the browser if the HTTPS source allows CORS. The browser cannot bypass account requirements or cross-origin restrictions.

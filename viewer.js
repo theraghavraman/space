@@ -285,6 +285,7 @@
     $("#viewerCopy").disabled = true;
   }
   async function renderImage(file, kind) {
+    if(file.size>MAX_CONVERT_BYTES)throw new Error("Image viewing is capped at 100 MB in this browser to protect memory.");
     addHeading("Image viewer", "Original pixels are shown by your browser. Export options re-encode locally.");
     const img = document.createElement("img"); img.className="viewer-image"; img.alt="Preview of "+file.name; img.src=newObjectUrl(file);
     const frame = document.createElement("div"); frame.className="viewer-image-frame"; frame.append(img); stage().append(frame);
@@ -526,6 +527,7 @@
     $("#viewerCopy").disabled=false;
   }
   async function renderPdf(file) {
+    if(file.size>MAX_CONVERT_BYTES)throw new Error("PDF viewing is capped at 100 MB in this browser. Use a local PDF application for larger documents.");
     await loadScript(LIB.pdf,()=>!!window.pdfjsLib);
     window.pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
     const pdf=await window.pdfjsLib.getDocument({data:await file.arrayBuffer()}).promise;
@@ -833,6 +835,7 @@
     $("#viewerCopy").disabled=false;
   }
   async function renderGeoTiff(file) {
+    if(file.size>MAX_CONVERT_BYTES)throw new Error("GeoTIFF viewing is capped at 100 MB in this browser. Use GDAL or QGIS for larger rasters.");
     await loadScript(LIB.geotiff,()=>!!window.GeoTIFF);
     const tiff=await window.GeoTIFF.fromBlob(file);
     const image=await tiff.getImage();
@@ -1240,6 +1243,7 @@
     activeViewerCleanup=()=>{if(resizeObserver)resizeObserver.disconnect();controls.dispose();renderer.dispose();renderer.forceContextLoss();scene.traverse((o)=>{if(o.geometry)o.geometry.dispose();if(Array.isArray(o.material))o.material.forEach((m)=>m.dispose());else if(o.material)o.material.dispose();});};
   }
   async function renderModel(file) {
+    if(file.size>MAX_CONVERT_BYTES)throw new Error("GLB/glTF viewing is capped at 100 MB in this browser. Use a dedicated 3D application for larger models.");
     await loadScript(LIB.modelViewer,()=>!!customElements.get("model-viewer"),true);
     await customElements.whenDefined("model-viewer");
     addHeading("3D model viewer","GLB is the most portable single-file input. External buffers referenced by a .gltf file may need to be selected alongside the model.");
@@ -1532,7 +1536,7 @@
       } else if(target==="pdf-text") {
         if(!currentPreview.pdf) throw new Error("Open the PDF in the viewer before extracting text.");
         const pdf=currentPreview.pdf;
-        const pageLimit=Math.min(pdf.numPages,500);
+        const pageLimit=Math.min(pdf.numPages,250);
         const chunks=[];
         for(let p=1;p<=pageLimit;p++){
           const page=await pdf.getPage(p);

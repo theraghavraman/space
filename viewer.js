@@ -891,15 +891,15 @@
         queryStatus.className="viewer-query-status error";return;
       }
       try {
-        const result=db.exec(query);
+        const result=db.exec("SELECT * FROM ("+query+") LIMIT "+MAX_TABLE_ROWS);
         const first=result[0];
         queryState.fields=first?first.columns:[];
-        queryState.rows=first?first.values.map((values)=>Object.fromEntries(queryState.fields.map((field,i)=>[field,values[i]]))):[];
+        queryState.rows=first?first.values.slice(0,MAX_TABLE_ROWS).map((values)=>Object.fromEntries(queryState.fields.map((field,i)=>[field,values[i]]))):[];
         queryState.sql=query;
         out.replaceChildren();
-        if(first)addTable(queryState.rows.map((row)=>queryState.fields.map((field)=>row[field])),queryState.fields,"Query returned "+queryState.rows.length+" row(s). Results are capped only for display; SQL query itself executes in memory.");
+        if(first)addTable(queryState.rows.map((row)=>queryState.fields.map((field)=>row[field])),queryState.fields,"At most "+MAX_TABLE_ROWS+" rows are returned to the interface to protect browser memory. Add ORDER BY / LIMIT in your query as required.");
         else {const note=document.createElement("p");note.className="viewer-caption";note.textContent="The statement returned no row set.";out.append(note);}
-        queryStatus.textContent="Query completed: "+queryState.rows.length+" row(s), "+queryState.fields.length+" column(s).";
+        queryStatus.textContent="Query completed: up to "+queryState.rows.length+" row(s), "+queryState.fields.length+" column(s).";
         queryStatus.className="viewer-query-status success";
         currentPreview={type:"sqlite",db:db,rows:queryState.rows,headers:queryState.fields,sql:queryState.sql,tables:items};
         setTargets(targetsFor(file,"sqlite"));

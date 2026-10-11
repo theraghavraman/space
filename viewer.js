@@ -194,7 +194,7 @@
     return unusual / Math.min(bytes.length,4096) < 0.08;
   }
   function supportedTextExt(ext) {
-    return [".txt",".md",".csv",".tsv",".tab",".json",".geojson",".xml",".gml",".kml",".gpx",".yaml",".yml",".log",".lbl",".pvl",".sql",".py",".ipynb",".vrt",".prj",".wkt",".rpc",".hdr",".ini",".cfg",".dat",".asc",".stp",".step",".obj",".mtl",".xyz",".pts",".sp3",".orb",".out",".err",".lis"].includes(ext);
+    return [".txt",".md",".html",".m",".cpg",".wld",".tf",".tls",".lsk",".fk",".ik",".bpc",".tpc",".tsc",".csv",".tsv",".tab",".json",".geojson",".xml",".gml",".kml",".gpx",".yaml",".yml",".log",".lbl",".pvl",".sql",".py",".ipynb",".vrt",".prj",".wkt",".rpc",".hdr",".ini",".cfg",".dat",".asc",".stp",".step",".obj",".mtl",".xyz",".pts",".sp3",".orb",".out",".err",".lis"].includes(ext);
   }
   function setTargets(targets) {
     const select = $("#viewerTarget"); select.replaceChildren();
@@ -1091,6 +1091,36 @@
     $("#viewerCopy").disabled=true;
     activeViewerCleanup=()=>{try{db.close();}catch(_){}};
   }
+  async function renderShapefileComponent(file, extension) {
+    if(file.size>MAX_CONVERT_BYTES)throw new Error("Shapefile component inspection is limited to 100 MB in the browser.");
+    await loadScript(LIB.shpJs,()=>typeof window.shp==="function");
+    const bytes=new Uint8Array(await file.arrayBuffer());
+    if(extension===".dbf") {
+      const records=window.shp.parseDbf(bytes);
+      if(!Array.isArray(records))throw new Error("DBF attribute table could not be decoded.");
+      const fields=Array.from(new Set(records.flatMap((record)=>Object.keys(record||{}))));
+      const rows=records.slice(0,MAX_TABLE_ROWS).map((record)=>fields.map((field)=>record[field]));
+      addHeading("dBASE / Shapefile attribute table","Reads the DBF sidecar attributes directly. It cannot reconstruct geometries without the matching .shp component.");
+      metaStrip([["RECORDS",String(records.length)],["FIELDS",String(fields.length)],["PREVIEW",String(rows.length)]]);
+      addTable(rows,fields,"DBF attributes. Pair this file with its same-stem .shp, .shx, .prj and optional .cpg files for the complete layer.");
+      currentPreview={type:"table",rows:records.slice(0,MAX_TABLE_ROWS),headers:fields,text:JSON.stringify(records.slice(0,MAX_TABLE_ROWS),null,2)};
+      $("#viewerCopy").disabled=false;
+      setTargets(targetsFor(file,"table"));
+      return;
+    }
+    if(extension===".shp") {
+      const geometries=window.shp.parseShp(bytes);
+      if(!Array.isArray(geometries))throw new Error("The SHP geometry stream could not be decoded.");
+      const data=window.shp.combine([geometries]);
+      data.features=data.features.map((feature,index)=>Object.assign({},feature,{id:index+1,properties:{}}));
+      if(!data.features.length)throw new Error("The SHP file did not contain renderable features.");
+      addHeading("Shapefile geometry viewer","The .shp geometry stream can be inspected on its own, but attributes and coordinate-reference information live in sibling files. Select the complete set as a ZIP to retain attributes and projection data.");
+      await renderGeoJSON(new File([JSON.stringify(data)],file.name.replace(/\.shp$/i,"")+".geojson",{type:"application/geo+json"}));
+      currentPreview={type:"geojson",value:data,text:JSON.stringify(data,null,2)};
+      setTargets([{value:"shape-geojson",label:"Export geometry → GeoJSON"},{value:"report-json",label:"Export file report → JSON"},{value:"zip",label:"Create ZIP archive"}]);
+      addNotice("Geometry decoded without DBF attributes or PRJ reprojection. For a complete GIS layer, load a ZIP containing matching .shp/.shx/.dbf and optional .prj/.cpg files.","warn");
+    }
+  }
   async function renderFile(file) {
     if(!file) return;
     clearStage();activeFile=file;activeFormatRecord=null;
@@ -1125,6 +1155,10 @@
         kind="table";setTargets(targetsFor(file,kind));await renderCsv(file,ext===".tsv"||ext===".tab"?"\t":"");
       } else if([".xlsx",".xlsm",".xlsb",".xls",".ods"].includes(ext)) {
         kind="workbook";setTargets(targetsFor(file,kind));await renderWorkbook(file);
+      } else if(ext===".shp") {
+        kind="geojson";setTargets([{value:"report-json",label:"Export file report → JSON"},{value:"zip",label:"Create ZIP archive"}]);await renderShapefileComponent(file,ext);
+      } else if(ext===".dbf") {
+        kind="table";await renderShapefileComponent(file,ext);
       } else if(ext===".geojson") {
         kind="geojson";setTargets(targetsFor(file,kind));await renderGeoJSON(file);
       } else if([".jsonl",".ndjson"].includes(ext)) {
@@ -1135,7 +1169,7 @@
         kind="yaml";setTargets(targetsFor(file,kind));await renderYaml(file);
       } else if([".kml",".gpx"].includes(ext)) {
         kind="geojson";setTargets(targetsFor(file,kind));await renderKmlOrGpx(file);
-      } else if([".xml",".gml",".lbl.xml",".votable.xml",".vot",".pvl"].includes(ext)) {
+      } else if([".xml",".gml",".lbl.xml",".votable.xml",".votable",".vot",".pvl"].includes(ext)) {
         kind="xml";setTargets(targetsFor(file,kind));await renderXml(file);
       } else if(ext===".tar" || ext===".tar.gz" || /\.tgz$/i.test(file.name)) {
         kind="tar";await renderTarFile(file);
@@ -1211,6 +1245,7 @@
       return window.jsyaml.load(await file.text(),{json:true});
     }
     if([".csv",".tsv",".tab"].includes(ext)) return parseTableFile(file);
+    if(ext===".dbf") { await loadScript(LIB.shpJs,()=>typeof window.shp==="function"); return window.shp.parseDbf(new Uint8Array(await file.arrayBuffer())); }
     if(ext===".parquet") return parseParquetFile(file);
     if([".arrow",".feather",".arrows"].includes(ext)) return parseArrowFile(file);
     if([".xml",".gml",".kml",".gpx",".pvl"].includes(ext)) return xmlToObject(new DOMParser().parseFromString(await file.text(),"application/xml").documentElement);

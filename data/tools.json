@@ -182,7 +182,7 @@
   {
     "name": "FITS.js (astrojs)",
     "category": "Astronomy",
-    "summary": "Pinned browser FITS parser used to enumerate HDUs and extension headers. SPACE separately renders a conservative uncompressed 2-D primary-image preview; compressed images, all table/cube layouts and standards validation still require specialized processing.",
+    "summary": "Pinned browser FITS parser used to enumerate HDUs, extension headers and bounded binary-table samples. SPACE can export displayed table samples to CSV/JSON/XLSX and renders a conservative uncompressed primary 2-D image preview; full table export, compressed images and standards validation require specialist processing.",
     "source": "https://github.com/astrojs/fitsjs",
     "repository": "https://github.com/astrojs/fitsjs",
     "license": "MIT",

@@ -1317,7 +1317,7 @@
         blob=new Blob([packed],{type:"application/zip"});name=file.name+".zip";
       } else if(target==="decompress") {
         if(!activeDecompressedBytes) throw new Error("Decompression payload is not available. Reload the compressed file first.");
-        blob=new Blob([activeDecompressedBytes]);name=file.name.replace(/\.gz$/i,"")||"decompressed.bin";
+        blob=new Blob([activeDecompressedBytes]);name=file.name.replace(/\.(gz|bz2)$/i,"")||"decompressed.bin";
       } else if(target==="report-json") {
         const signature=await readHead(file,64);
         const report={

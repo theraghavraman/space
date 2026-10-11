@@ -171,7 +171,7 @@
       const option = document.createElement("option"); option.value = value; option.textContent = value; agency.append(option);
     });
     group.value = oldGroup; agency.value = oldAgency;
-    $("#formatCount").textContent = formats.length + "+";
+    $("#formatCount").textContent = formats.length + " / " + new Set(formats.flatMap(f => f.extensions || [])).size;
     renderFormats(true);
   }
 
@@ -235,9 +235,9 @@
       }
       has(prefixOk, "FITS primary header starts with SIMPLE.", "FITS primary-header signature SIMPLE was not found at byte 0.");
       has(endCardAt >= 0, "An END card was found at an 80-byte card boundary in the inspected header window.", "No END card found in the first 64 KiB; header may be longer, malformed or not FITS.");
-      has(fileName.toLowerCase().endsWith(".fz") || bytes.length === 0 || true, "FITS filename noted; the compressed/uncompressed variant needs format-aware parsing.", "File variant unknown.");
+      has(true, "FITS filename noted; the compressed/uncompressed variant needs format-aware parsing.", "File variant unknown.");
       // Do not fail total-size checks for truncated sampling; whole size should be a multiple of 2880 in a completed standard FITS file.
-      has(file.size === undefined || true, "Header check only: HDU/data padding and complete file length require full FITSverify.", "Full-file validation not performed.");
+      has(true, "Header check only: HDU/data padding and complete file length require full FITSverify.", "Full-file validation not performed.");
     } else if (ext === ".h5" || ext === ".hdf5" || ext === ".hdf") {
       has(detected === "HDF5 signature" || ext === ".hdf", "HDF5 magic detected, or HDF4 needs separate parser checks.", "HDF signature not recognized in inspected prefix.");
     } else if (ext === ".nc" || ext === ".nc4") {
@@ -396,7 +396,7 @@
     }).filter(x => x.score > 0).sort((a,b)=>b.score-a.score).slice(0,8);
     if (!ranked.length) return collections.slice(0,limit).map(c=>({title:c.title || c.id,id:c.id,summary:c.description,collection:c.id,portalUrl:c.links?.find(l=>l.rel==="self")?.href || base+"/collections/"+encodeURIComponent(c.id),docUrl:"https://documentation.dataspace.copernicus.eu/APIs/STAC.html"}));
     const body = {collections:ranked.slice(0,5).map(x=>x.collection.id),limit};
-    if (temporal) body.datetime = temporal.replace("..", "");
+    if (temporal) body.datetime = temporal;
     let data;
     try { data = await fetchJSON(base + "/search", {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)}); }
     catch (_) { // A collection-level fallback still gives useful live data if item search is unavailable.
@@ -559,7 +559,7 @@
     renderTools();
     wireEvents();
     selectedProvider=sourcePortal();
-    $("#formatCount").textContent=formats.length+"+";
+    $("#formatCount").textContent=formats.length+" / "+new Set(formats.flatMap(f=>f.extensions||[])).size;
   }
   init();
 })();

@@ -248,6 +248,7 @@
       ".h5":(n)=>n.startsWith("hdf4 / hdf5"),
       ".hdf5":(n)=>n.startsWith("hdf4 / hdf5"),
       ".xml":(n)=>n.includes("xml / json / yaml"),
+      ".mat":(n)=>n.includes("matlab"),
       ".fits":(n)=>n.includes("fits"),
       ".fit":(n)=>n.includes("fits"),
       ".fts":(n)=>n.includes("fits"),
@@ -722,6 +723,26 @@
     if(bitpix===-32) return view.getFloat32(offset,false);
     if(bitpix===-64) return view.getFloat64(offset,false);
     return null;
+  }
+  async function hasFitsPrimarySignature(file) {
+    const bytes=await readHead(file,16);
+    const signature=Array.from(bytes.slice(0,9)).map((byte)=>String.fromCharCode(byte)).join("");
+    return signature.startsWith("SIMPLE  =");
+  }
+  async function renderMatHeader(file) {
+    if(file.size<128)throw new Error("MAT-file is shorter than a Level-5 header.");
+    const header=await readHead(file,128);
+    const text=Array.from(header.slice(0,116)).map((b)=>String.fromCharCode(b)).join("").replace(/\0+$/,"").trim();
+    const endian=String.fromCharCode(header[126]||0,header[127]||0);
+    const versionHex="0x"+header[125].toString(16).padStart(2,"0")+header[124].toString(16).padStart(2,"0");
+    const isHdf5=await isHDF5File(file);
+    addHeading("MATLAB MAT-file inspector","Shows the MATLAB file header and identifies the main container family. Older MAT-file array data is not converted without a format-aware parser; MATLAB v7.3 files use an HDF5 container.");
+    metaStrip([["CONTAINER",isHdf5?"MATLAB v7.3 / HDF5":"MATLAB MAT-file"],["SIZE",formatBytes(file.size)],["ENDIAN MARKER",endian||"unknown"],["HEADER VERSION",versionHex]]);
+    addPre(text||"MATLAB Level-5 header is not readable as text.", "MAT-FILE DESCRIPTIVE HEADER");
+    addNotice(isHdf5?"This file has an HDF5 signature. Try the HDF5 reader for group and dataset metadata. MATLAB object semantics and sparse/cell structures may need MATLAB-compatible software.":"Header inspection only. Full MATLAB Level-5 parsing and variable export are not implemented for all classes/compression layouts; use MATLAB, GNU Octave or a specialist MAT-file reader for scientific conversions.","warn");
+    currentPreview={type:"mat",text:text,headerVersion:versionHex,endian:endian,hdf5:isHdf5};
+    $("#viewerCopy").disabled=false;
+    setTargets([{value:"report-json",label:"Export file report → JSON"},{value:"zip",label:"Create ZIP archive"}]);
   }
   async function renderFits(file) {
     const bytes=await readHead(file,Math.min(file.size,2880*32));
@@ -1228,8 +1249,13 @@
         kind="image";setTargets(targetsFor(file,kind));await renderImage(file,kind);
       } else if([".tif",".tiff",".cog",".geotiff"].includes(ext)) {
         kind="tiff";setTargets(targetsFor(file,kind));await renderGeoTiff(file);
-      } else if([".fits",".fit",".fts"].includes(ext)) {
-        kind="fits";setTargets(targetsFor(file,kind));await renderFits(file);
+      } else if(ext===".mat" && await isHDF5File(file)) {
+        kind="hdf5";setTargets([{value:"report-json",label:"Export file report → JSON"},{value:"zip",label:"Create ZIP archive"}]);await renderHDF5(file);
+      } else if(ext===".mat") {
+        kind="mat";await renderMatHeader(file);
+      } else if([".fits",".fit",".fts"].includes(ext) || ([".evt",".lc",".pha",".arf",".rmf",".rsp",".bdf",".bc",".fits.fz",".fz"].includes(ext) && await hasFitsPrimarySignature(file))) {
+        kind="fits";await renderFits(file);
+        setTargets(currentPreview.canvas?targetsFor(file,"fits"):[{value:"report-json",label:"Export file report → JSON"},{value:"zip",label:"Create ZIP archive"}]);
       } else if([".nc",".nc3",".netcdf"].includes(ext)) {
         if(await isHDF5File(file)){kind="hdf5";setTargets(targetsFor(file,kind));await renderHDF5(file);}
         else {kind="netcdf";setTargets(targetsFor(file,kind));await renderNetCDF(file);}

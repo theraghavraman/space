@@ -1497,7 +1497,7 @@
         kind="mat";await renderMatHeader(file);
       } else if([".fits",".fit",".fts"].includes(ext) || ([".evt",".lc",".pha",".arf",".rmf",".rsp",".bdf",".bc",".fits.fz",".fz"].includes(ext) && await hasFitsPrimarySignature(file))) {
         kind="fits";await renderFits(file);
-        setTargets(currentPreview.canvas?targetsFor(file,"fits"):[{value:"report-json",label:"Export file report → JSON"},{value:"zip",label:"Create ZIP archive"}]);
+        setTargets(currentPreview.canvas || (currentPreview.fitsRows && currentPreview.fitsRows.length) ? targetsFor(file,"fits") : [{value:"report-json",label:"Export file report → JSON"},{value:"zip",label:"Create ZIP archive"}]);
       } else if([".nc",".nc3",".netcdf"].includes(ext)) {
         if(await isHDF5File(file)){kind="hdf5";setTargets(targetsFor(file,kind));await renderHDF5(file);}
         else {kind="netcdf";setTargets(targetsFor(file,kind));await renderNetCDF(file);}

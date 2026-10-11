@@ -245,7 +245,7 @@
   {
     "name": "Three.js loaders / exporters",
     "category": "3D / engineering mesh",
-    "summary": "WebGL toolkit with open-source STL, OBJ and PLY loaders and STL/OBJ exporters. SPACE offers interactive mesh viewing plus a mesh conversion workflow; unit scale, engineering tolerances and unsupported object materials require separate validation.",
+    "summary": "WebGL toolkit with open-source loaders for STL, OBJ, PLY, 3MF, COLLADA/DAE, 3DS and VRML, plus STL/OBJ exporters. SPACE offers interactive mesh viewing and mesh conversion; unit scale, tolerances, external textures and engineering fidelity require separate validation.",
     "source": "https://threejs.org/manual/pages/loading-3d-models.html",
     "repository": "https://github.com/mrdoob/three.js",
     "license": "MIT",

@@ -863,7 +863,7 @@
         const report={
           generatedAt:new Date().toISOString(),
           source:{name:file.name,extension:extOf(file)||null,mimeType:file.type||null,sizeBytes:file.size,lastModified:file.lastModified?new Date(file.lastModified).toISOString():null},
-          viewer:{mode:currentPreview.type||"unknown",previewText:currentPreview.text?safeText(currentPreview.text).slice(0,12000):null,tableColumns:currentPreview.headers||null,previewRows:currentPreview.rows?currentPreview.rows.slice(0,100):null},
+          viewer:{mode:currentPreview.type||"unknown",previewText:currentPreview.text?safeText(currentPreview.text).slice(0,12000):null,tableColumns:currentPreview.headers||null,previewRows:currentPreview.rows?currentPreview.rows.slice(0,100):null,archiveEntryPaths:currentPreview.entries?Object.keys(currentPreview.entries).slice(0,1000):null},
           signature:{firstBytesHex:Array.from(signature).map((v)=>v.toString(16).padStart(2,"0")).join(" "),firstBytesAscii:Array.from(signature).map((v)=>v>=32&&v<127?String.fromCharCode(v):".").join("")},
           note:"Identification report only. A matching extension or signature is not proof of standards compliance, data integrity, scientific calibration or provenance."
         };
@@ -950,7 +950,7 @@
             mime=target==="tsv"?"text/tab-separated-values;charset=utf-8":"text/csv;charset=utf-8";ext=target;
           }
         }
-        blob=new Blob([output],{type:mime});name=file.name.replace(/\.[^.]+$/,"")+"."+ext;
+        if(target!=="xlsx") { blob=new Blob([output],{type:mime});name=file.name.replace(/\.[^.]+$/,"")+"."+ext; }
       } else {
         throw new Error("This conversion is not implemented for this input type. The viewer keeps the original untouched.");
       }

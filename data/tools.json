@@ -277,5 +277,23 @@
     "repository": "https://github.com/calvinmetcalf/shapefile-js",
     "license": "MIT",
     "run": "await shp(zipArrayBuffer)"
+  },
+  {
+    "name": "sql.js",
+    "category": "Database inspection",
+    "summary": "SQLite compiled to WebAssembly for in-browser database inspection. SPACE opens the local database in memory, lists tables/views and runs a single SELECT-only query for CSV/TSV/JSON/XLSX export.",
+    "source": "https://github.com/sql-js/sql.js",
+    "repository": "https://github.com/sql-js/sql.js",
+    "license": "MIT",
+    "run": "const db = new SQL.Database(new Uint8Array(arrayBuffer)); db.exec('SELECT * FROM table LIMIT 250')"
+  },
+  {
+    "name": "Apache Arrow JavaScript",
+    "category": "Columnar / interchange data",
+    "summary": "Arrow JS tableFromIPC reader for Arrow IPC and Feather-compatible files. SPACE previews up to 250 rows and 40 columns and supports sample exports; nested/extension types and analytical semantics may require specialized handling.",
+    "source": "https://github.com/apache/arrow",
+    "repository": "https://github.com/apache/arrow",
+    "license": "Apache-2.0",
+    "run": "tableFromIPC(new Uint8Array(arrayBuffer))"
   }
 ]

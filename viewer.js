@@ -372,6 +372,116 @@
       $("#viewerCopy").disabled=false;
     }
   }
+  function xmlDescendants(node, name) {
+    return Array.from(node && node.getElementsByTagName ? node.getElementsByTagName("*") : []).filter((item) => item.localName === name);
+  }
+  function xmlFirst(node, name) {
+    return xmlDescendants(node, name)[0] || null;
+  }
+  function xmlCoordinates(node) {
+    const raw = (node && node.textContent || "").trim();
+    return raw.split(/\s+/).filter(Boolean).map((tuple) => tuple.split(",").map(Number))
+      .filter((coords) => coords.length >= 2 && Number.isFinite(coords[0]) && Number.isFinite(coords[1]))
+      .map((coords) => coords.slice(0, 2));
+  }
+  function kmlGeometry(node) {
+    if (!node) return null;
+    const children = Array.from(node.children || []);
+    if (node.localName === "MultiGeometry") {
+      const geometries = children.map(kmlGeometry).filter(Boolean);
+      return geometries.length === 1 ? geometries[0] : geometries.length ? { type: "GeometryCollection", geometries } : null;
+    }
+    if (node.localName === "Point") {
+      const points = xmlCoordinates(xmlFirst(node, "coordinates"));
+      return points.length ? { type: "Point", coordinates: points[0] } : null;
+    }
+    if (node.localName === "LineString" || node.localName === "LinearRing") {
+      const points = xmlCoordinates(xmlFirst(node, "coordinates"));
+      return points.length ? { type: "LineString", coordinates: points } : null;
+    }
+    if (node.localName === "Polygon") {
+      const outer = xmlDescendants(node, "outerBoundaryIs").map((boundary) => xmlCoordinates(xmlFirst(boundary, "coordinates"))).find((ring) => ring.length);
+      if (!outer) return null;
+      const holes = xmlDescendants(node, "innerBoundaryIs").map((boundary) => xmlCoordinates(xmlFirst(boundary, "coordinates"))).filter((ring) => ring.length);
+      return { type: "Polygon", coordinates: [outer, ...holes] };
+    }
+    return null;
+  }
+  function simpleXmlProperties(node) {
+    const properties = {};
+    const name = xmlFirst(node, "name");
+    if (name && name.textContent.trim()) properties.name = name.textContent.trim();
+    const description = xmlFirst(node, "description");
+    if (description && description.textContent.trim()) properties.description = description.textContent.trim();
+    xmlDescendants(node, "Data").forEach((data) => {
+      const key = data.getAttribute("name");
+      const value = xmlFirst(data, "value");
+      if (key && value) properties[key] = value.textContent.trim();
+    });
+    xmlDescendants(node, "SimpleData").forEach((data) => {
+      const key = data.getAttribute("name");
+      if (key) properties[key] = data.textContent.trim();
+    });
+    return properties;
+  }
+  function parseKmlDocument(doc) {
+    const features = [];
+    xmlDescendants(doc, "Placemark").forEach((placemark, index) => {
+      const geometryNodes = Array.from(placemark.children || []).filter((child) =>
+        ["Point", "LineString", "LinearRing", "Polygon", "MultiGeometry"].includes(child.localName));
+      const geometries = geometryNodes.map(kmlGeometry).filter(Boolean);
+      const geometry = geometries.length === 1 ? geometries[0] : geometries.length ? { type: "GeometryCollection", geometries } : null;
+      if (geometry) features.push({ type: "Feature", id: index + 1, properties: simpleXmlProperties(placemark), geometry });
+    });
+    return { type: "FeatureCollection", features };
+  }
+  function parseGpxDocument(doc) {
+    const features = [];
+    const pointFrom = (node) => {
+      const lon = Number(node.getAttribute("lon")), lat = Number(node.getAttribute("lat"));
+      return Number.isFinite(lon) && Number.isFinite(lat) ? [lon, lat] : null;
+    };
+    const pointProperties = (node) => {
+      const properties = simpleXmlProperties(node);
+      const ele = xmlFirst(node, "ele"), time = xmlFirst(node, "time"), type = xmlFirst(node, "type");
+      if (ele) properties.elevation = Number(ele.textContent.trim());
+      if (time) properties.time = time.textContent.trim();
+      if (type) properties.type = type.textContent.trim();
+      return properties;
+    };
+    xmlDescendants(doc, "wpt").forEach((node, i) => {
+      const point = pointFrom(node);
+      if (point) features.push({ type: "Feature", id: "wpt-" + i, properties: pointProperties(node), geometry: { type: "Point", coordinates: point } });
+    });
+    xmlDescendants(doc, "rte").forEach((node, i) => {
+      const points = Array.from(node.children || []).filter((child) => child.localName === "rtept").map(pointFrom).filter(Boolean);
+      if (points.length) features.push({ type: "Feature", id: "rte-" + i, properties: pointProperties(node), geometry: { type: "LineString", coordinates: points } });
+    });
+    xmlDescendants(doc, "trk").forEach((node, i) => {
+      const segments = xmlDescendants(node, "trkseg").map((segment) =>
+        Array.from(segment.children || []).filter((child) => child.localName === "trkpt").map(pointFrom).filter(Boolean))
+        .filter((points) => points.length);
+      if (segments.length) {
+        const geometry = segments.length === 1 ? { type: "LineString", coordinates: segments[0] } : { type: "GeometryCollection", geometries: segments.map((coordinates) => ({ type: "LineString", coordinates })) };
+        features.push({ type: "Feature", id: "trk-" + i, properties: pointProperties(node), geometry });
+      }
+    });
+    return { type: "FeatureCollection", features };
+  }
+  async function renderKmlOrGpx(file) {
+    if (file.size > MAX_TEXT_BYTES) throw new Error("KML / GPX spatial preview is limited to 32 MB in the browser.");
+    const text = await file.text();
+    const doc = new DOMParser().parseFromString(text, "application/xml");
+    if (doc.querySelector("parsererror")) throw new Error("XML is malformed; no spatial features could be parsed.");
+    const data = extOf(file) === ".gpx" ? parseGpxDocument(doc) : parseKmlDocument(doc);
+    if (!data.features.length) throw new Error("No supported KML placemarks or GPX waypoints, routes or tracks were found.");
+    addHeading(extOf(file) === ".gpx" ? "GPX route & waypoint viewer" : "KML placemark viewer",
+      "Features are converted into a lightweight local GeoJSON preview. Coordinates are shown as supplied; this is not a reprojection, geodesic calculation or topology validator.");
+    await renderGeoJSON(new File([JSON.stringify(data)], file.name.replace(/\.[^.]+$/, "") + ".geojson", { type: "application/geo+json" }));
+    currentPreview = { type: "geojson", value: data, text: JSON.stringify(data, null, 2) };
+    setTargets([{ value: "shape-geojson", label: "Export features → GeoJSON" }, { value: "geojson-csv", label: "Feature properties + geometry → CSV" }, { value: "report-json", label: "Export file report → JSON" }, { value: "zip", label: "Create ZIP archive" }]);
+    addNotice("Decoded " + data.features.length + " spatial feature(s) in the browser. Original coordinates and attributes remain unchanged.", "success");
+  }
   async function renderXml(file) {
     const text=await file.slice(0,MAX_TEXT_BYTES).text();
     addHeading("XML / label viewer","PDS labels, VOTable, GML, KML and other XML-family files are shown as source, not silently rewritten.");
@@ -754,6 +864,14 @@
     }
     entries=window.fflate.unzipSync(bytes);activeArchive=entries;
     const names=Object.keys(entries);
+    const kmlName=names.find((name)=>/\.kml$/i.test(name));
+    if(kmlName) {
+      const kmlFile=new File([entries[kmlName]],kmlName,{type:"application/vnd.google-earth.kml+xml"});
+      activeFormatRecord=await findFormatRecord(kmlFile);
+      await renderKmlOrGpx(kmlFile);
+      addNotice("KMZ archive parsed locally: "+kmlName+". Other archive entries remain available in the original download; this preview focuses on the first KML document.","success");
+      return;
+    }
     if(names.some((name)=>/\.shp$/i.test(name))) {
       await loadScript(LIB.shpJs,()=>typeof window.shp==="function");
       addHeading("Shapefile / ZIP geospatial viewer","Reading a local ZIP that contains one or more .shp layers with shpjs. CRS files are preserved in the input package; coordinates are displayed as delivered and are not reprojected.");
@@ -1015,7 +1133,9 @@
         kind="json";setTargets(targetsFor(file,kind));await renderJson(file);
       } else if([".yaml",".yml"].includes(ext)) {
         kind="yaml";setTargets(targetsFor(file,kind));await renderYaml(file);
-      } else if([".xml",".gml",".kml",".gpx",".lbl.xml",".votable.xml",".vot",".pvl"].includes(ext)) {
+      } else if([".kml",".gpx"].includes(ext)) {
+        kind="geojson";setTargets(targetsFor(file,kind));await renderKmlOrGpx(file);
+      } else if([".xml",".gml",".lbl.xml",".votable.xml",".vot",".pvl"].includes(ext)) {
         kind="xml";setTargets(targetsFor(file,kind));await renderXml(file);
       } else if(ext===".tar" || ext===".tar.gz" || /\.tgz$/i.test(file.name)) {
         kind="tar";await renderTarFile(file);

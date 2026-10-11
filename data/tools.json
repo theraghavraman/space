@@ -182,7 +182,7 @@
   {
     "name": "FITS.js (astrojs)",
     "category": "Astronomy",
-    "summary": "Open-source FITS reader project with image HDU, data cube and table capabilities. SPACE currently uses a conservative primary 2-D image-plane preview and header reader; full validation remains external.",
+    "summary": "Pinned browser FITS parser used to enumerate HDUs and extension headers. SPACE separately renders a conservative uncompressed 2-D primary-image preview; compressed images, all table/cube layouts and standards validation still require specialized processing.",
     "source": "https://github.com/astrojs/fitsjs",
     "repository": "https://github.com/astrojs/fitsjs",
     "license": "MIT",

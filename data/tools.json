@@ -322,5 +322,23 @@
     "repository": "https://github.com/mrdoob/three.js",
     "license": "MIT",
     "run": "new VTKLoader().parse(await file.arrayBuffer())"
+  },
+  {
+    "name": "loaders.gl LAS/LAZ",
+    "category": "Geospatial point clouds",
+    "summary": "MIT-licensed LAS/LAZ reader for point coordinates, intensity, classification, and cloud metadata. SPACE renders a bounded point sample and exports sampled CSV/JSON/PLY. Current upstream loader documentation notes format/version limitations; large surveys belong in PDAL or CloudCompare.",
+    "source": "https://loaders.gl/docs/modules/las/api-reference/las-loader",
+    "repository": "https://github.com/visgl/loaders.gl",
+    "license": "MIT",
+    "run": "const result = await parse(arrayBuffer, LASLoader)"
+  },
+  {
+    "name": "Three.js point rendering",
+    "category": "3D / point clouds",
+    "summary": "WebGL point-cloud display with orbit controls and bounded vertex sampling. SPACE centers survey coordinates for display and preserves original coordinate values in sample exports; no georeferencing/reprojection occurs.",
+    "source": "https://threejs.org/docs/#api/en/objects/Points",
+    "repository": "https://github.com/mrdoob/three.js",
+    "license": "MIT",
+    "run": "new THREE.Points(geometry, new THREE.PointsMaterial({ size: 2, vertexColors: true }))"
   }
 ]

@@ -186,6 +186,8 @@
           <input class="viewer-file-input" id="viewerFile" type="file" aria-label="Choose a file to view or convert">
           <span class="viewer-drop-icon">↥</span><h3>Drop any file here</h3><p>Or click to browse. Supports common office, data, media, raster and space-science files.</p>
         </label>
+        <div class="viewer-actions"><input class="viewer-file-input" id="viewerFolder" type="file" webkitdirectory directory multiple aria-label="Choose a Zarr store folder"><button class="btn small" id="viewerOpenFolder" type="button">Open Zarr folder</button></div>
+        <p class="hint">For a chunked Zarr store, select the store folder or upload a ZIP of the store.</p>
         <div class="viewer-file-name" id="viewerFileName">No file selected</div>
         <div class="viewer-file-meta" id="viewerFileMeta">Files stay in this browser tab</div>
         <div class="viewer-detected" id="viewerDetected">Ready for a file</div>

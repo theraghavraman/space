@@ -29,9 +29,10 @@ jobs:
         with:
           enablement: true
 
-      - name: Validate JavaScript and JSON registries
+      - name: Validate application scripts and JSON registries
         run: |
           node --check app.js
+          node --check viewer.js
           python3 - <<'PY'
           import json
           from pathlib import Path

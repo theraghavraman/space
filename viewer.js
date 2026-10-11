@@ -187,12 +187,12 @@
   }
   function targetsFor(file, kind) {
     const ext = extOf(file);
-    const common = [{value:"zip",label:"Create ZIP archive"}];
+    const common = [{value:"report-json",label:"Export file report → JSON"}, {value:"zip",label:"Create ZIP archive"}];
     if (kind === "image") return [{value:"png",label:"Image → PNG"}, {value:"jpeg",label:"Image → JPEG"}, {value:"webp",label:"Image → WebP"}].concat(common);
     if (kind === "tiff" || kind === "fits") return [{value:"png",label:"Rendered preview → PNG"}, {value:"jpeg",label:"Rendered preview → JPEG"}].concat(common);
-    if (kind === "pdf") return [{value:"pdf-png",label:"Current PDF page → PNG"}, {value:"pdf-jpeg",label:"Current PDF page → JPEG"}].concat(common);
-    if (kind === "table" || ext===".csv" || ext===".tsv" || ext===".tab") return [{value:"csv",label:"Export as CSV"}, {value:"tsv",label:"Export as TSV"}, {value:"json",label:"Table → JSON"}].concat(common);
-    if (kind === "json") return [{value:"json-pretty",label:"Pretty-print JSON"}, {value:"json-min",label:"Minify JSON"}, {value:"csv",label:"JSON records → CSV"}, {value:"tsv",label:"JSON records → TSV"}, {value:"yaml",label:"JSON → YAML"}, {value:"xml",label:"JSON → XML"}].concat(common);
+    if (kind === "pdf") return [{value:"pdf-png",label:"Current PDF page → PNG"}, {value:"pdf-jpeg",label:"Current PDF page → JPEG"}, {value:"pdf-text",label:"Extract PDF text → TXT"}].concat(common);
+    if (kind === "table" || ext===".csv" || ext===".tsv" || ext===".tab") return [{value:"csv",label:"Export as CSV"}, {value:"tsv",label:"Export as TSV"}, {value:"json",label:"Table → JSON"}, {value:"xlsx",label:"Table → XLSX workbook"}].concat(common);
+    if (kind === "json") return [{value:"json-pretty",label:"Pretty-print JSON"}, {value:"json-min",label:"Minify JSON"}, {value:"csv",label:"JSON records → CSV"}, {value:"tsv",label:"JSON records → TSV"}, {value:"xlsx",label:"JSON records → XLSX"}, {value:"yaml",label:"JSON → YAML"}, {value:"xml",label:"JSON → XML"}].concat(common);
     if (kind === "yaml") return [{value:"json",label:"YAML → JSON"}, {value:"yaml",label:"Normalize YAML"}].concat(common);
     if (kind === "xml") return [{value:"json",label:"XML → JSON (simple documents)"}, {value:"xml",label:"Normalize XML"}].concat(common);
     if (kind === "workbook") return [{value:"csv",label:"Selected sheet → CSV"}, {value:"tsv",label:"Selected sheet → TSV"}, {value:"json",label:"Selected sheet → JSON"}].concat(common);
@@ -574,7 +574,7 @@
       const preview=output.subarray(0,Math.min(output.length,2*1024*1024));
       addPre(new TextDecoder("utf-8",{fatal:false}).decode(preview),"DECOMPRESSED TEXT PREVIEW");
       if(preview.length<output.length)addNotice("Text preview truncated; the decompressed data can still be downloaded in full.");
-      currentPreview={type:"gzip",bytes:output};setTargets([{value:"decompress",label:"Download decompressed payload"}].concat([{value:"zip",label:"Wrap original in ZIP"}]));
+      currentPreview={type:"gzip",bytes:output};setTargets([{value:"decompress",label:"Download decompressed payload"},{value:"report-json",label:"Export file report → JSON"},{value:"zip",label:"Wrap original in ZIP"}]);
       const btn=document.createElement("button");btn.className="btn small";btn.textContent="Download decompressed file";btn.onclick=()=>downloadBlob(new Blob([output]),file.name.replace(/\.gz$/i,"")||"decompressed.bin");stage().append(btn);
       return;
     }
@@ -858,6 +858,30 @@
       } else if(target==="decompress") {
         if(!activeGzipBytes) throw new Error("Decompression payload is not available. Reload the .gz file first.");
         blob=new Blob([activeGzipBytes]);name=file.name.replace(/\.gz$/i,"")||"decompressed.bin";
+      } else if(target==="report-json") {
+        const signature=await readHead(file,64);
+        const report={
+          generatedAt:new Date().toISOString(),
+          source:{name:file.name,extension:extOf(file)||null,mimeType:file.type||null,sizeBytes:file.size,lastModified:file.lastModified?new Date(file.lastModified).toISOString():null},
+          viewer:{mode:currentPreview.type||"unknown",previewText:currentPreview.text?safeText(currentPreview.text).slice(0,12000):null,tableColumns:currentPreview.headers||null,previewRows:currentPreview.rows?currentPreview.rows.slice(0,100):null},
+          signature:{firstBytesHex:Array.from(signature).map((v)=>v.toString(16).padStart(2,"0")).join(" "),firstBytesAscii:Array.from(signature).map((v)=>v>=32&&v<127?String.fromCharCode(v):".").join("")},
+          note:"Identification report only. A matching extension or signature is not proof of standards compliance, data integrity, scientific calibration or provenance."
+        };
+        blob=new Blob([JSON.stringify(report,null,2)],{type:"application/json;charset=utf-8"});
+        name=file.name+".space-report.json";
+      } else if(target==="pdf-text") {
+        if(!currentPreview.pdf) throw new Error("Open the PDF in the viewer before extracting text.");
+        const pdf=currentPreview.pdf;
+        const pageLimit=Math.min(pdf.numPages,500);
+        const chunks=[];
+        for(let p=1;p<=pageLimit;p++){
+          const page=await pdf.getPage(p);
+          const content=await page.getTextContent();
+          chunks.push("----- PAGE "+p+" -----\n"+content.items.map((item)=>item.str||"").join(" "));
+        }
+        if(pdf.numPages>pageLimit)chunks.push("\n[TRUNCATED: only first 500 pages were extracted by the browser safety limit]");
+        blob=new Blob([chunks.join("\n\n")],{type:"text/plain;charset=utf-8"});
+        name=file.name.replace(/\.pdf$/i,"")+".txt";
       } else if (target === "mesh-stl" || target === "mesh-obj") {
         if(currentPreview.type!=="mesh3d" || !currentPreview.object) throw new Error("Load an STL, OBJ or PLY mesh before exporting another mesh format.");
         const exporterUrl=target==="mesh-stl"?MODULES.stlExporter:MODULES.objExporter;
@@ -886,7 +910,7 @@
         blob=result;name=file.name.replace(/\.[^.]+$/,"")+(mime==="image/jpeg"?".jpg":mime==="image/webp"?".webp":".png");
         if(currentPreview.type==="pdf") name=file.name.replace(/\.pdf$/i,"")+"-page-"+currentPreview.page+(mime==="image/jpeg"?".jpg":".png");
         if(canvas.width>=8192||canvas.height>=8192) status("Image was encoded with an 8,192 px browser-memory limit. The original is unchanged.");
-      } else if(["csv","tsv","json","yaml","xml","json-pretty","json-min","text"].includes(target)) {
+      } else if(["csv","tsv","json","xlsx","yaml","xml","json-pretty","json-min","text"].includes(target)) {
         let output="",mime="text/plain;charset=utf-8",ext=target;
         const sourceExt=extOf(file);
         if(target==="text") { output=await file.text();ext="txt"; }
@@ -911,11 +935,20 @@
           const parsed=await parseFileValue(file);
           let rows,fields;
           if(parsed && parsed.rows && parsed.fields) {rows=parsed.rows;fields=parsed.fields;}
-          else if(Array.isArray(parsed)) {rows=asRecords(parsed);fields=Array.from(new Set(rows.flatMap((r)=>Object.keys(r))));}
-          else {throw new Error("No tabular rows were available to export.");}
-          await loadScript(LIB.papa,()=>!!window.Papa);
-          output=window.Papa.unparse({fields:fields,data:rows.map((row)=>fields.map((f)=>row[f]) )},{delimiter:target==="tsv"?"\t":",",newline:"\r\n"});
-          mime=target==="tsv"?"text/tab-separated-values;charset=utf-8":"text/csv;charset=utf-8";ext=target;
+          else {rows=asRecords(parsed);fields=Array.from(new Set(rows.flatMap((r)=>Object.keys(r))));}
+          if(target==="xlsx") {
+            await loadScript(LIB.sheet,()=>!!window.XLSX);
+            const workbook=window.XLSX.utils.book_new();
+            const sheet=window.XLSX.utils.json_to_sheet(rows,{header:fields});
+            window.XLSX.utils.book_append_sheet(workbook,sheet,"Export");
+            const data=window.XLSX.write(workbook,{bookType:"xlsx",type:"array"});
+            blob=new Blob([data],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
+            name=file.name.replace(/\.[^.]+$/,"")+".xlsx";
+          } else {
+            await loadScript(LIB.papa,()=>!!window.Papa);
+            output=window.Papa.unparse({fields:fields,data:rows.map((row)=>fields.map((f)=>row[f]) )},{delimiter:target==="tsv"?"\t":",",newline:"\r\n"});
+            mime=target==="tsv"?"text/tab-separated-values;charset=utf-8":"text/csv;charset=utf-8";ext=target;
+          }
         }
         blob=new Blob([output],{type:mime});name=file.name.replace(/\.[^.]+$/,"")+"."+ext;
       } else {

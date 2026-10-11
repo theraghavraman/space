@@ -244,7 +244,7 @@
     } else if (ext === ".h5" || ext === ".hdf5") {
       has(detected === "HDF5 signature", "HDF5 magic detected; group/dataset structure not checked.", "HDF5 signature not detected in the expected header location.");
     } else if (ext === ".hdf" || ext === ".h4") {
-      has(false, "HDF4 requires an HDF4-aware reader; this inspector does not identify the HDF4 signature reliably.", "HDF4 signature not checked.");
+      checks.push({ok:false,text:"HDF4 requires an HDF4-aware reader; its signature and internal structure are not validated by this inspector."});
     } else if (ext === ".nc" || ext === ".nc4") {
       const ncMagic = starts(bytes,[0x43,0x44,0x46,0x01]) || starts(bytes,[0x43,0x44,0x46,0x02]) || detected === "HDF5 signature";
       has(ncMagic, "NetCDF classic or HDF5-based NetCDF-4 signature clue detected.", "No recognized NetCDF classic/HDF5 signature; use a NetCDF-aware reader.");

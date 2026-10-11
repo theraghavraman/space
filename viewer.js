@@ -338,7 +338,7 @@
     }
     const dataOffset=Math.ceil(end/2880)*2880;
     const pixelCount=width*height, bytesPerPixel=Math.abs(bitpix)/8;
-    if(!Number.isSafeInteger(pixelCount) || pixelCount>100000000 || dataOffset+pixelCount*bytesPerPixel>file.size) {
+    if(!Number.isSafeInteger(pixelCount) || pixelCount>8000000 || dataOffset+pixelCount*bytesPerPixel>file.size) {
       addNotice("Image plane is too large or incomplete for browser rendering. Header details are available above.","warn");
       currentPreview={type:"fits",text:details};$("#viewerCopy").disabled=false;return;
     }
@@ -395,7 +395,7 @@
     const bytes=new Uint8Array(await file.arrayBuffer());
     const ext=extOf(file);
     let entries;
-    if(ext===".gz") {
+    if(ext===".gz" || /\.gz$/i.test(file.name)) {
       const output=window.fflate.gunzipSync(bytes);activeGzipBytes=output;
       addHeading("GZIP inspector","The compressed payload has been decompressed locally in memory. Use the download button to save it separately.");
       metaStrip([["COMPRESSED",formatBytes(file.size)],["EXPANDED",formatBytes(output.byteLength)],["TYPE","GZIP stream"]]);
@@ -463,7 +463,7 @@
         kind="yaml";setTargets(targetsFor(file,kind));await renderYaml(file);
       } else if([".xml",".gml",".kml",".gpx",".lbl.xml",".votable.xml",".pvl"].includes(ext)) {
         kind="xml";setTargets(targetsFor(file,kind));await renderXml(file);
-      } else if([".zip",".kmz"].includes(ext) || ext===".gz") {
+      } else if([".zip",".kmz"].includes(ext) || ext===".gz" || /\.gz$/i.test(file.name)) {
         kind=ext===".gz"?"gzip":"zip";await renderArchive(file);
       } else if([".mp3",".wav",".ogg",".flac",".m4a",".aac"].includes(ext) || (file.type&&file.type.startsWith("audio/"))) {
         kind="audio";addHeading("Audio player","Playback depends on the codecs supported by this browser.");
@@ -600,9 +600,11 @@
           const val=JSON.parse(await file.text());output=JSON.stringify(val,null,target==="json-pretty"?2:0);mime="application/json;charset=utf-8";ext="json";
         } else if(target==="json" || target==="yaml" || target==="xml") {
           let value;
-          if(sourceExt===".csv"||sourceExt===".tsv"||sourceExt===".tab"||sourceExt===".xlsx"||sourceExt===".xls"||sourceExt===".xlsm"||sourceExt===".xlsb"||sourceExt===".ods") {
-            const parsed=await parseTableFile(file).catch(async()=>parseFileValue(file));
-            value=parsed && parsed.rows ? parsed.rows : parsed;
+          if(sourceExt===".csv"||sourceExt===".tsv"||sourceExt===".tab") {
+            const parsed=await parseTableFile(file);
+            value=parsed.rows;
+          } else if(sourceExt===".xlsx"||sourceExt===".xls"||sourceExt===".xlsm"||sourceExt===".xlsb"||sourceExt===".ods") {
+            value=await parseFileValue(file);
           } else if(sourceExt===".xml"||sourceExt===".gml"||sourceExt===".kml"||sourceExt===".gpx"||sourceExt===".pvl") {
             const doc=new DOMParser().parseFromString(await file.text(),"application/xml");
             if(doc.querySelector("parsererror")) throw new Error("Input XML is malformed and cannot be converted.");
@@ -661,15 +663,6 @@
     $("#viewerReset").addEventListener("click",resetViewer);
     $("#viewerCopy").addEventListener("click",copyPreview);
     $("#viewerOriginal").addEventListener("click",()=>{if(activeFile)downloadBlob(activeFile,activeFile.name);});
-    document.addEventListener("click",(e)=>{
-      const action=e.target.closest("[data-extension]");
-      if(action && action.closest("#formatGrid")) {
-        const ext=action.dataset.extension||"";
-        $("#viewerExtensionHint").textContent=ext?"Suggested type: "+ext+" — choose a matching local file to open it.":"Choose a local file to open.";
-        $("#viewer").scrollIntoView({behavior:"smooth",block:"start"});
-        $("#viewerFile").click();
-      }
-    });
   }
   function downloadFromRegistry(format) {
     $("#viewerExtensionHint").textContent=format ? "Suggested type: "+format+" — choose a matching local file to open it." : "Choose a local file to open.";

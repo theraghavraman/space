@@ -338,7 +338,7 @@
     }
     const dataOffset=Math.ceil(end/2880)*2880;
     const pixelCount=width*height, bytesPerPixel=Math.abs(bitpix)/8;
-    if(!Number.isSafeInteger(pixelCount) || pixelCount>8000000 || dataOffset+pixelCount*bytesPerPixel>file.size) {
+    if(!Number.isSafeInteger(pixelCount) || pixelCount>4000000 || dataOffset+pixelCount*bytesPerPixel>file.size) {
       addNotice("Image plane is too large or incomplete for browser rendering. Header details are available above.","warn");
       currentPreview={type:"fits",text:details};$("#viewerCopy").disabled=false;return;
     }

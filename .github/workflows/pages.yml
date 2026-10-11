@@ -1,0 +1,51 @@
+name: Deploy SPACE to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: \${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v6
+        with:
+          enablement: true
+
+      - name: Validate JavaScript and JSON registries
+        run: |
+          node --check app.js
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          for path in (Path("data/formats.json"), Path("data/sources.json"), Path("data/tools.json")):
+              value = json.loads(path.read_text(encoding="utf-8"))
+              assert isinstance(value, list) and value, f"{path} is empty or not a JSON array"
+              print(f"{path}: {len(value)} entries")
+          PY
+
+      - name: Upload static website
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: .
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5

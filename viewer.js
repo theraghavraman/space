@@ -1124,7 +1124,12 @@
   }
   async function fetchRemoteRange(url,start,end) {
     if(!Number.isSafeInteger(start)||!Number.isSafeInteger(end)||start<0||end<=start)throw new Error("Invalid FITS byte range.");
-    const response=await fetch(url.href,{method:"GET",headers:{Range:"bytes="+start+"-"+(end-1)},mode:"cors",credentials:"omit",cache:"no-store",redirect:"error"});
+    let response;
+    try {
+      response=await fetch(url.href,{method:"GET",headers:{Range:"bytes="+start+"-"+(end-1)},mode:"cors",credentials:"omit",cache:"no-store",redirect:"error"});
+    } catch(err) {
+      throw new Error("Browser could not read the remote FITS range. Check the URL, HTTPS, CORS permission, and whether the server redirects; paste the final public file URL rather than a landing page.");
+    }
     if(response.status!==206) {
       try {if(response.body&&response.body.cancel)await response.body.cancel();} catch(_){}
       if(response.status===200)throw new Error("Server ignored the Range header and returned a full response. SPACE stopped without downloading the large file.");
@@ -1144,7 +1149,7 @@
     const initial=await fetchRemoteRange(url,0,FITS_RANGE_CHUNK_BYTES);
     const cache=[{start:0,end:initial.end,bytes:initial.bytes}];
     return {
-      name:url.pathname.split("/").pop()||"remote.fits",
+      name:(/\.(fits?|fts)$/i.test(url.pathname.split("/").pop()||"")?(url.pathname.split("/").pop()||"remote.fits"):((url.pathname.split("/").pop()||"remote")+".fits")),
       type:"application/fits",
       size:initial.total,
       isRangeSource:true,

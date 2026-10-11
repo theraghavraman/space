@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="theme-color" content="#07111f">
+  <meta name="theme-color" content="#eaf2f5">
   <meta name="description" content="SPACE — an independent mission-data observatory for discovering, fetching and inspecting space-science file formats across global agencies.">
   <title>SPACE — Mission Data Observatory</title>
   <link rel="icon" type="image/svg+xml" href="./assets/space.svg">
@@ -26,8 +26,72 @@
     @media(max-width:820px){.shell{padding:0 18px}.topbar{height:68px}.brand{min-width:unset}.nav{display:none;position:absolute;left:12px;right:12px;top:68px;padding:12px;background:#081626;border:1px solid var(--line);border-radius:14px;box-shadow:0 25px 55px #0009;align-items:stretch;flex-direction:column}.nav.open{display:flex}.nav a{padding:12px}.menu-toggle{display:inline-flex}.top-actions .btn.ghost{display:none}.hero{grid-template-columns:1fr;padding-top:45px;min-height:auto}.hero-art{min-height:350px;max-width:570px;width:100%;margin:0 auto}.hero h1{font-size:clamp(43px,9vw,70px)}.signal-strip{grid-template-columns:repeat(2,1fr)}.signal:nth-child(2){border-right:0}.signal:nth-child(-n+2){border-bottom:1px solid #19334e}.finder-main,.fetch-card{grid-column:span 12}.source-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.filterbar{grid-template-columns:1fr 1fr}.filterbar .searchbox{grid-column:span 2}.format-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.inspector-grid{grid-template-columns:1fr}.tool-list{grid-template-columns:repeat(2,minmax(0,1fr))}.countries{grid-template-columns:repeat(3,minmax(0,1fr))}}
     @media(max-width:540px){.shell{padding:0 13px}.brand-word{font-size:16px}.brand-sub{font-size:8px;letter-spacing:1px}.top-actions .btn:not(.menu-toggle){display:none}.hero h1{letter-spacing:-2px}.hero p{font-size:15px}.hero-art{min-height:290px}.earth{width:64%}.orbit-tag{min-width:112px;padding:8px}.orbit-tag strong{font-size:11px}.orbit-tag .label{font-size:8px}.satellite{transform:scale(.75) rotate(-24deg);right:7%;top:13%}.section{padding-top:44px}.section-head{align-items:flex-start;flex-direction:column}.section-side{text-align:left}.signal{padding:13px 10px;gap:9px}.signal .num{font-size:18px}.signal .desc{font-size:8px}.panel-body{padding:14px}.panel-header{padding:15px}.field-row{flex-direction:column;align-items:stretch}.source-grid,.format-grid,.tool-list{grid-template-columns:1fr}.source-card{min-height:unset}.filterbar{grid-template-columns:1fr}.filterbar .searchbox{grid-column:span 1}.countries{grid-template-columns:repeat(2,minmax(0,1fr))}.metric-mini{grid-template-columns:1fr}.hero-foot{gap:12px}}
     @media(prefers-reduced-motion:reduce){*,*:before,*:after{scroll-behavior:auto!important;transition:none!important;animation:none!important}}
+  
+    /* Light orbital-lab theme: cool mist surfaces, sage tint, deep ink, teal + cobalt accents. */
+    :root{color-scheme:light;--bg:#eaf1f4;--panel:#f5f9fb;--panel2:#e7f0f4;--line:#ccdbe4;--ink:#183249;--muted:#5d7285;--cyan:#087f9d;--mint:#167c68;--violet:#6e65b8;--amber:#a96519;--danger:#b33c55}
+    body{background-color:#eaf1f4;background-image:radial-gradient(ellipse at 70% -10%,rgba(84,183,207,.28),transparent 42%),radial-gradient(ellipse at 8% 35%,rgba(129,129,198,.11),transparent 32%),linear-gradient(180deg,#edf4f7 0%,#e8f0f3 55%,#eef3ed 100%);color:var(--ink)}
+    body:before{opacity:.15;background-image:radial-gradient(1px 1px at 12% 13%,#7395ab 98%,transparent),radial-gradient(1px 1px at 81% 17%,#4e91ad 98%,transparent),radial-gradient(1px 1px at 69% 45%,#6685a4 98%,transparent),radial-gradient(1px 1px at 32% 75%,#91a7bf 98%,transparent),radial-gradient(1.5px 1.5px at 92% 70%,#6686a0 98%,transparent),radial-gradient(1px 1px at 52% 26%,#3f9cb5 98%,transparent)}
+    a{color:#087f9d}a:hover{color:#075b7d}
+    .topbar{background:rgba(238,245,248,.9);border-bottom-color:#d1dfe7;box-shadow:0 5px 24px rgba(50,83,105,.05)}
+    .brand-mark{border-color:#8bbecb;box-shadow:0 0 20px rgba(63,162,187,.13);color:#087f9d}
+    .brand-word{color:#183249}.brand-sub{color:#698094}
+    .nav a{color:#536d82}.nav a:hover,.nav a.active{background:#dcebf0;color:#075f7b}
+    .btn{background:#e1edf2;color:#203b52;border-color:#b9ccd8;box-shadow:0 2px 4px rgba(31,67,87,.03)}
+    .btn:hover{background:#d6e8ef;border-color:#79adbd}.btn.primary{background:#087f9d;color:white;border-color:#087f9d}.btn.primary:hover{background:#066b86}
+    .btn.ghost{background:rgba(255,255,255,.28)}
+    button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible{outline-color:#087f9d}
+    .hero h1 .outline{-webkit-text-stroke:1.5px #087f9d}
+    .hero p{color:#5a7084}.hero-foot{color:#647d91}.eyebrow{color:#167c68}.pulse{background:#1e9b82;box-shadow:0 0 12px rgba(30,155,130,.32)}
+    .orbital-frame{background:radial-gradient(circle at 50% 55%,rgba(76,176,202,.18),rgba(115,145,174,.05) 45%,transparent 70%);border-color:rgba(79,147,174,.17)}
+    .orbital-frame:before,.orbital-frame:after{border-color:rgba(52,146,173,.23)}.orbital-frame:after{border-color:rgba(125,112,190,.24)}
+    .earth{box-shadow:inset -26px -20px 50px #071d36,inset 12px 6px 26px rgba(142,255,210,.44),0 0 48px rgba(62,170,210,.21),0 0 110px rgba(62,145,255,.1)}
+    .orbit-tag{background:rgba(246,251,253,.93);border-color:#c4d8e3;color:#183249;box-shadow:0 12px 35px rgba(47,83,107,.13)}
+    .orbit-tag .label{color:#688196}.orbit-tag strong{color:#23435a}
+    .signal-strip{background:rgba(221,234,240,.66);border-color:#cbdbe4}.signal{border-color:#ccdae3}.signal:nth-child(-n+2){border-color:#ccdae3}.signal .num{color:#087f9d}.signal .desc{color:#5c7488}
+    .section-head .kicker{color:#167c68}.section-side{color:#687f91}.section-head p{color:#5d7285}
+    .panel{background:linear-gradient(140deg,rgba(249,252,253,.98),rgba(236,244,247,.98));border-color:#cddbe4;box-shadow:0 16px 42px rgba(40,76,99,.07)}
+    .panel-header{border-bottom-color:#d7e3e9}.panel-meta{color:#678195}
+    .field label{color:#61798c}.field input,.field select,.field textarea,.searchbox{background:#f4f8fa;color:#183249;border-color:#c5d6e0}
+    .field input::placeholder,.searchbox::placeholder{color:#8297a8}.field input:focus,.field select:focus,.field textarea:focus,.searchbox:focus{border-color:#1686a3;box-shadow:0 0 0 3px rgba(8,127,157,.10)}
+    .hint{color:#657e91}.status{background:#e7f0f4;border-color:#cbdbe4;color:#456279}.status.success{border-color:#8fcbb9;color:#14664f;background:#e5f5ef}.status.error{border-color:#e0acb6;color:#9d3047;background:#fff0f2}
+    .result-item{border-color:#ccdae4;background:#eff5f7}.result-item p{color:#61798d}.tag{border-color:#c0d4df;color:#46677c;background:#e5eff3}.tag.live{color:#176c57;border-color:#9fcebf;background:#e4f5ee}.tag.lock{color:#915b1b;border-color:#e1c19a;background:#fbf0df}
+    .source-card{border-color:#cbdbe4;background:linear-gradient(145deg,#f9fcfd,#eaf2f5);box-shadow:0 10px 22px rgba(44,81,103,.035)}.source-card:hover{border-color:#70aebe}.source-card p{color:#5e7689}.source-links a{color:#087f9d}.agency-mark{border-color:#b7d0dc;color:#087f9d;background:#e4f0f4}
+    .format-card{border-color:#cbdbe4;background:linear-gradient(140deg,#f8fbfc,#eaf2f5);box-shadow:0 8px 19px rgba(36,75,96,.035)}.format-card:hover{border-color:#70aebe}.ext-list{color:#087f9d}.format-card p{color:#5f788c}.format-meta{border-color:#d9e4ea}.format-meta div{color:#627b8e}.format-meta strong{color:#29475e}.format-actions button{color:#087f9d}
+    .dropzone{border-color:#a5c5d4;background:radial-gradient(ellipse at 50% 0%,rgba(133,196,215,.25),transparent 67%),#eff6f8}.drop-symbol{border-color:#a8cbd8;color:#087f9d;background:#e2f0f4}
+    .metric-mini div{border-color:#cedde5;background:#edf4f7}.metric-mini small{color:#667e91}.check-row{border-color:#d1dfe7;color:#4c687e;background:#f3f8fa}.check-row .dot{color:#16816a}.check-row.warn .dot{color:#a96519}.check-row.fail .dot{color:#b33c55}.callout{background:rgba(241,211,169,.22);color:#795222}
+    .tool-card,.country{border-color:#cfdee6;background:#f1f6f8;box-shadow:0 8px 18px rgba(36,75,96,.025)}.tool-card .tool-kind{color:#167c68}.tool-card p{color:#5e778b}.tool-card a{color:#087f9d}.countries .country span{color:#637b8e}
+    .footer{border-top-color:#cfdee6}.footer p{color:#637c90}.footer-mark{color:#087f9d}.empty{color:#60798d;border-color:#c4d6e0;background:rgba(247,251,252,.55)}
+    .nav{background:transparent}
+    @media(max-width:820px){.nav{background:#f6fafb;border-color:#cfdee6;box-shadow:0 25px 55px rgba(34,65,85,.16)}}
+    /* Universal viewer / converter workspace */
+    .viewer-layout{display:grid;grid-template-columns:minmax(255px,.72fr) minmax(0,1.7fr);gap:16px}
+    .viewer-side{padding:19px;border-right:1px solid #d8e4e9;background:linear-gradient(180deg,#edf5f7,#f5f8f4);border-radius:17px 0 0 17px}
+    .viewer-dropzone{border:1.5px dashed #8fb9c9;border-radius:16px;background:linear-gradient(145deg,#e2f1f4,#f3f6f0);padding:25px 18px;text-align:center;cursor:pointer;transition:.2s}
+    .viewer-dropzone:hover,.viewer-dropzone.drag-over{border-color:#087f9d;background:#dceff3;box-shadow:0 0 0 4px rgba(8,127,157,.08)}
+    .viewer-drop-icon{width:48px;height:48px;margin:0 auto 12px;display:grid;place-items:center;border-radius:15px;background:#d0e8ed;color:#087f9d;font-size:24px}
+    .viewer-dropzone h3{margin:0 0 6px;font:700 16px var(--display);color:#183249}.viewer-dropzone p{font-size:12px;color:#647c8e;margin:0}
+    .viewer-file-input{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
+    .viewer-file-name{font:700 14px var(--display);overflow-wrap:anywhere;margin-top:16px;color:#203c53}.viewer-file-meta{font:10px var(--mono);color:#657e91;overflow-wrap:anywhere;margin-top:5px}
+    .viewer-detected{display:inline-flex;margin-top:12px;border:1px solid #a9d3c8;color:#146b59;background:#e4f5ed;border-radius:999px;padding:5px 9px;font:10px var(--mono);max-width:100%;overflow-wrap:anywhere}
+    .viewer-converter{display:grid;gap:9px;margin-top:22px}.viewer-converter label{font:10px var(--mono);color:#647c8f;text-transform:uppercase;letter-spacing:1px}.viewer-converter select{width:100%;border:1px solid #c2d6df;border-radius:10px;padding:11px;background:#f7fafb;color:#203b52;min-width:0}
+    .viewer-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}.viewer-actions .btn{flex:1}.viewer-status-wrap{min-width:0}
+    .viewer-main{min-width:0;padding:18px}.viewer-main-top{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:0 0 14px}.viewer-main-top h3{margin:0;font:700 17px var(--display);color:#183249}.viewer-main-top p{margin:4px 0 0;font-size:11px;color:#667f92}
+    .viewer-stage{min-height:370px;border:1px solid #d3e0e7;border-radius:15px;background:rgba(247,251,252,.78);padding:16px;overflow:auto}
+    .viewer-empty{min-height:330px;display:grid;align-content:center;justify-items:center;text-align:center;padding:25px}.viewer-empty>span{width:55px;height:55px;display:grid;place-items:center;background:#dfedf1;color:#087f9d;border-radius:18px;font-size:26px}.viewer-empty h3{margin:15px 0 5px;color:#24445b;font:700 18px var(--display)}.viewer-empty p{max-width:430px;color:#657f92;font-size:12px;margin:0}
+    .viewer-stage-head{display:flex;flex-direction:column;gap:3px;margin:0 0 12px}.viewer-stage-head h3{font:700 17px var(--display);margin:0;color:#203b52}.viewer-stage-head p{font-size:12px;color:#617b8e;margin:0}
+    .viewer-metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px;margin:10px 0 15px}.viewer-metric{border:1px solid #d3e1e7;border-radius:11px;background:#edf4f7;padding:10px;min-width:0}.viewer-metric small{display:block;color:#6b8294;font:9px var(--mono);letter-spacing:.7px}.viewer-metric strong{display:block;color:#24455c;font:600 12px var(--mono);overflow-wrap:anywhere;margin-top:4px}
+    .viewer-image-frame{display:grid;place-items:center;min-height:180px;max-height:68vh;padding:12px;background:linear-gradient(135deg,#e7f0f3,#f4f5ee);border:1px solid #d2e0e6;border-radius:13px;overflow:auto;margin:12px 0}.viewer-image{max-width:100%;max-height:64vh;object-fit:contain}.viewer-science-canvas{max-width:100%;max-height:62vh;object-fit:contain;image-rendering:auto}.viewer-pdf-canvas{display:block;width:100%;height:auto;max-width:100%;border:1px solid #d7e1e5;background:white;border-radius:4px;margin:12px auto;box-shadow:0 4px 16px rgba(37,62,76,.08)}
+    .viewer-media{width:100%;max-height:520px;margin:15px 0}.viewer-caption{font:10px var(--mono);color:#637d90;margin:0 0 8px}.viewer-pre-wrap{margin:12px 0;border:1px solid #d3e0e7;border-radius:12px;overflow:hidden;background:#f0f5f7}.viewer-pre{margin:0;padding:13px;white-space:pre;overflow:auto;max-height:430px;color:#233f54;font:11px/1.55 var(--mono);tab-size:2}
+    .viewer-table-wrap{margin:12px 0;max-width:100%;overflow:auto;border:1px solid #d1dfe6;border-radius:12px;background:#f8fbfc}.viewer-data-table{border-collapse:separate;border-spacing:0;width:100%;font:11px/1.45 var(--mono);white-space:nowrap}.viewer-data-table th{position:sticky;top:0;background:#e1edf2;color:#24485f;text-align:left;font-weight:600;border-bottom:1px solid #c8d9e2;padding:9px 10px}.viewer-data-table td{padding:8px 10px;border-bottom:1px solid #e1e9ed;color:#344f63;max-width:360px;overflow:hidden;text-overflow:ellipsis}.viewer-data-table tr:nth-child(even) td{background:#f0f6f8}.viewer-notice{border-left:3px solid #168a73;background:#e6f4ee;color:#255f53;padding:10px 12px;margin:12px 0;border-radius:0 9px 9px 0;font-size:12px;overflow-wrap:anywhere}.viewer-notice.warn{border-left-color:#c1832d;background:#fbf0dc;color:#7f561e}
+    .viewer-page-controls{display:flex;align-items:center;justify-content:center;gap:12px;margin:12px 0}.viewer-page-controls span{font:11px var(--mono);color:#536e81}
+    .viewer-archive-list{display:grid;gap:7px;margin-top:12px}.viewer-archive-item{display:grid;grid-template-columns:minmax(0,1fr) 80px auto;align-items:center;gap:9px;border:1px solid #d3e0e7;background:#f2f7f9;border-radius:9px;padding:8px 10px}.viewer-archive-item span{overflow-wrap:anywhere;color:#29495f;font:11px var(--mono)}.viewer-archive-item small{color:#6b8294}.viewer-archive-item .btn{white-space:nowrap}
+    #viewerSheet{max-width:220px;border:1px solid #c2d6df;border-radius:10px;background:#f7fafb;color:#203b52;padding:8px}.viewer-layout .status{white-space:pre-wrap}
+    @media(max-width:900px){.viewer-layout{grid-template-columns:1fr}.viewer-side{border-right:0;border-bottom:1px solid #d8e4e9;border-radius:17px 17px 0 0}.viewer-main{padding:14px}.viewer-stage{min-height:280px}}
+    @media(max-width:540px){.viewer-side{padding:13px}.viewer-main{padding:10px}.viewer-stage{padding:9px;min-height:230px}.viewer-empty{min-height:220px}.viewer-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.viewer-archive-item{grid-template-columns:minmax(0,1fr) auto}.viewer-archive-item small{display:none}.viewer-page-controls{gap:7px}.viewer-page-controls .btn{padding:7px}}
+
   </style>
   <script src="./app.js" defer></script>
+  <script src="./viewer.js" defer></script>
 </head>
 <body>
   <header class="topbar">
@@ -37,7 +101,7 @@
         <span><span class="brand-word">SPACE</span><span class="brand-sub">MISSION DATA OBSERVATORY</span></span>
       </a>
       <nav class="nav" id="mainNav" aria-label="Main navigation">
-        <a href="#finder">Mission finder</a><a href="#formats">Format atlas</a><a href="#inspector">File inspector</a><a href="#agencies">Agency network</a><a href="#tools">Tool locker</a>
+        <a href="#finder">Mission finder</a><a href="#formats">Format atlas</a><a href="#viewer">Viewer & convert</a><a href="#inspector">File inspector</a><a href="#agencies">Agency network</a><a href="#tools">Tool locker</a>
       </nav>
       <div class="top-actions"><a class="btn ghost" href="https://github.com/theraghavraman/space" target="_blank" rel="noopener">SOURCE ↗</a><button class="btn primary" data-scroll="#finder">Open data finder <span aria-hidden="true">↗</span></button><button class="btn menu-toggle" id="menuToggle" aria-label="Open menu">☰</button></div>
     </div>
@@ -110,8 +174,49 @@
       <div class="controls" style="justify-content:center;margin-top:20px"><button class="btn" id="loadMoreFormats">Load more formats ↓</button></div>
     </section>
 
-    <section class="shell section" id="inspector">
-      <div class="section-head"><div><div class="kicker">03 / Local diagnostics</div><h2>File signature inspector</h2><p>Check a local file without uploading it: inspect its header, identify common signatures, parse selected text formats and compute a SHA-256 checksum.</p></div><div class="section-side">LOCAL BROWSER PROCESSING</div></div>
+  
+  <section class="shell section" id="viewer">
+    <div class="section-head">
+      <div><div class="kicker">03 / Universal file lab</div><h2>File viewer & converter</h2><p>Open a local file and SPACE will choose a format-aware viewer, show useful metadata, and offer the conversions that are supported for that input. Your file stays in this browser tab.</p></div>
+      <div class="section-side">LOCAL-FIRST · VIEW · TRANSFORM · EXPORT</div>
+    </div>
+    <div class="panel viewer-layout">
+      <aside class="viewer-side">
+        <label class="viewer-dropzone" id="viewerDrop" for="viewerFile">
+          <input class="viewer-file-input" id="viewerFile" type="file" aria-label="Choose a file to view or convert">
+          <span class="viewer-drop-icon">↥</span><h3>Drop any file here</h3><p>Or click to browse. Supports common office, data, media, raster and space-science files.</p>
+        </label>
+        <div class="viewer-file-name" id="viewerFileName">No file selected</div>
+        <div class="viewer-file-meta" id="viewerFileMeta">Files stay in this browser tab</div>
+        <div class="viewer-detected" id="viewerDetected">Ready for a file</div>
+        <p class="hint" id="viewerExtensionHint">Choose a file to detect its format and available actions.</p>
+        <div class="viewer-converter">
+          <label for="viewerTarget">Convert / export as</label>
+          <select id="viewerTarget"><option value="">Choose a conversion…</option></select>
+          <select id="viewerSheet" class="hidden" aria-label="Select workbook sheet"></select>
+        </div>
+        <div class="viewer-actions">
+          <button class="btn primary" id="viewerConvert" type="button" disabled>Convert & download</button>
+          <button class="btn" id="viewerOriginal" type="button" disabled>Download original</button>
+        </div>
+        <div class="viewer-actions">
+          <button class="btn small" id="viewerCopy" type="button" disabled>Copy text preview</button>
+          <button class="btn small" id="viewerReset" type="button">Clear</button>
+        </div>
+        <div class="viewer-status-wrap"><div class="status" id="viewerStatus" role="status" aria-live="polite">Ready. Select or drop a local file.</div></div>
+        <div class="callout">Conversion quality matters: image exports and PDF-page exports are raster previews; table exports preserve data values but may not preserve workbook styling, formulas, macros or metadata. Specialist scientific binary conversions are not guessed.</div>
+      </aside>
+      <div class="viewer-main">
+        <div class="viewer-main-top"><div><h3>Live preview</h3><p>Detected format · file info · supported actions</p></div><span class="tag live">BROWSER PROCESSING</span></div>
+        <div class="viewer-stage" id="viewerStage">
+          <div class="viewer-empty"><span>✳</span><h3>Ready for your data</h3><p>Choose a file above. SPACE will select an appropriate viewer and list only conversions that make sense for the detected format.</p></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="shell section" id="inspector">
+      <div class="section-head"><div><div class="kicker">04 / Local diagnostics</div><h2>File signature inspector</h2><p>Check a local file without uploading it: inspect its header, identify common signatures, parse selected text formats and compute a SHA-256 checksum.</p></div><div class="section-side">LOCAL BROWSER PROCESSING</div></div>
       <div class="inspector-grid">
         <div class="panel"><div class="panel-header"><div><div class="panel-title">Drop a file for inspection</div><div class="panel-meta">No server upload · metadata and header checks</div></div><span class="tag live">PRIVATE BY DESIGN</span></div><div class="panel-body">
           <label for="localFile" class="dropzone" id="fileDrop"><span><span class="drop-symbol">⌁</span><h3>Select a local data file</h3><p>FITS, NetCDF, CDF, HDF5, GeoTIFF, PDS labels, SPICE, CCSDS dumps, archives, CAD and more.</p><span class="btn primary">Choose local file</span></span></label><input id="localFile" type="file" hidden>
@@ -122,17 +227,17 @@
     </section>
 
     <section class="shell section" id="agencies">
-      <div class="section-head"><div><div class="kicker">04 / International archive network</div><h2>Open a mission archive</h2><p>Country and organisation portals collected from official documentation. Public availability differs by mission; some archives require registration, API credentials, licensing checks or a data order.</p></div><div class="section-side">OFFICIAL SOURCES FIRST</div></div>
+      <div class="section-head"><div><div class="kicker">05 / International archive network</div><h2>Open a mission archive</h2><p>Country and organisation portals collected from official documentation. Public availability differs by mission; some archives require registration, API credentials, licensing checks or a data order.</p></div><div class="section-side">OFFICIAL SOURCES FIRST</div></div>
       <div id="sourceGrid" class="source-grid"></div>
     </section>
 
     <section class="shell section" id="tools">
-      <div class="section-head"><div><div class="kicker">05 / Decoder & validator directory</div><h2>Tool locker</h2><p>Use specialised, documented tools for real standards validation. SPACE does not claim to replace official validators, mission science software or data provider terms.</p></div><div class="section-side">SOURCE CODE → LICENSE → TOOL</div></div>
+      <div class="section-head"><div><div class="kicker">06 / Decoder & validator directory</div><h2>Tool locker</h2><p>Use specialised, documented tools for real standards validation. SPACE does not claim to replace official validators, mission science software or data provider terms.</p></div><div class="section-side">SOURCE CODE → LICENSE → TOOL</div></div>
       <div id="toolGrid" class="tool-list"></div>
     </section>
 
     <section class="shell section" id="validation">
-      <div class="section-head"><div><div class="kicker">06 / Trust model</div><h2>Four levels of data confidence</h2><p>Useful diagnostics should report what was actually tested and what remains unverified.</p></div></div>
+      <div class="section-head"><div><div class="kicker">07 / Trust model</div><h2>Four levels of data confidence</h2><p>Useful diagnostics should report what was actually tested and what remains unverified.</p></div></div>
       <div class="tool-list">
         <article class="tool-card"><div class="tool-kind">LEVEL 01 / IDENTITY</div><h3>Signature & extension</h3><p>Check magic bytes and extension agreement. Detect common mismatches and empty/truncated files; not enough to certify a standard.</p></article>
         <article class="tool-card"><div class="tool-kind">LEVEL 02 / STRUCTURE</div><h3>Parser & integrity</h3><p>Parse headers, records, checksums, internal references, manifests and archive members using a format-aware reader.</p></article>

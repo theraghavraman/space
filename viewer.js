@@ -1697,6 +1697,26 @@
         const exported=target==="mesh-stl"?exporter.parse(currentPreview.object,{binary:true}):exporter.parse(currentPreview.object);
         blob=new Blob([exported],{type:target==="mesh-stl"?"model/stl":"text/plain;charset=utf-8"});
         name=file.name.replace(/\.[^.]+$/,"")+(target==="mesh-stl"?".stl":".obj");
+      } else if(["fits-table-csv","fits-table-json","fits-table-xlsx"].includes(target)) {
+        const rows=currentPreview.type==="fits"&&currentPreview.fitsRows?currentPreview.fitsRows:[];
+        const fields=currentPreview.type==="fits"&&currentPreview.fitsFields?currentPreview.fitsFields:[];
+        if(!rows.length||!fields.length)throw new Error("No parsed FITS table sample is available to export.");
+        const base=file.name.replace(/\\.[^.]+$/,"");
+        if(target==="fits-table-json") {
+          blob=new Blob([JSON.stringify({hdu:currentPreview.fitsTableHdu,totalRowsSampled:rows.length,fields:fields,rows:rows},null,2)],{type:"application/json;charset=utf-8"});
+          name=base+".hdu-table.sample.json";
+        } else if(target==="fits-table-xlsx") {
+          await loadScript(LIB.sheet,()=>!!window.XLSX);
+          const workbook=window.XLSX.utils.book_new(),sheet=window.XLSX.utils.json_to_sheet(rows,{header:fields});
+          window.XLSX.utils.book_append_sheet(workbook,sheet,"FITS table sample");
+          blob=new Blob([window.XLSX.write(workbook,{bookType:"xlsx",type:"array"})],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
+          name=base+".hdu-table.sample.xlsx";
+        } else {
+          await loadScript(LIB.papa,()=>!!window.Papa);
+          const csv=window.Papa.unparse({fields:fields,data:rows.map((row)=>fields.map((field)=>row[field]))},{newline:"\\r\\n"});
+          blob=new Blob([csv],{type:"text/csv;charset=utf-8"});
+          name=base+".hdu-table.sample.csv";
+        }
       } else if(["points-csv","points-json","points-ply"].includes(target)) {
         const points=currentPreview.type==="pointcloud"?currentPreview.points:[];
         if(!points.length)throw new Error("No point-cloud sample is available to export.");

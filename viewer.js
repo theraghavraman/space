@@ -287,6 +287,7 @@
     $("#viewerFileMeta").textContent = extLabel(file) + " · " + formatBytes(file.size) + " · " + (file.type || "MIME not declared");
     $("#viewerDetected").textContent = subtitle || "Viewer selected";
     $("#viewerOriginal").disabled = false;
+    $("#viewerOriginal").textContent = file.isRangeSource ? "Open source URL" : "Download original";
     $("#viewerCopy").disabled = true;
   }
   async function renderImage(file, kind) {
@@ -1692,7 +1693,7 @@
     noteFile(file,activeFormatRecord ? activeFormatRecord.name : "Detecting format…");
     setTargets([{value:"report-json",label:"Export file report → JSON"},{value:"zip",label:"Create ZIP archive"}]);
     $("#viewerSheet").classList.add("hidden");$("#viewerSheet").replaceChildren();
-    status("Reading "+file.name+" locally. No upload is performed.");
+    status(file.isRangeSource ? "Preparing a byte-range preview from the remote source. The full file is not downloaded." : "Reading "+file.name+" locally. No upload is performed.");
     const ext=extOf(file);
     try {
       let kind="binary";
@@ -2102,7 +2103,7 @@
     clearStage();activeFile=null;$("#viewerFile").value="";$("#viewerFolder").value="";$("#viewerFileName").textContent="No file selected";
     $("#viewerFileMeta").textContent="Files stay in this browser tab";$("#viewerDetected").textContent="Ready for a file";
     $("#viewerTarget").replaceChildren(new Option("Choose a conversion…",""));$("#viewerConvert").disabled=true;
-    $("#viewerOriginal").disabled=true;$("#viewerCopy").disabled=true;$("#viewerSheet").classList.add("hidden");
+    $("#viewerOriginal").disabled=true;$("#viewerOriginal").textContent="Download original";$("#viewerCopy").disabled=true;$("#viewerSheet").classList.add("hidden");
     stage().innerHTML='<div class="viewer-empty"><span>✳</span><h3>Ready for your data</h3><p>Choose a file above. SPACE will select an appropriate viewer and list only conversions that make sense for the detected format.</p></div>';
     status("Ready. Select or drop a local file.");
   }
@@ -2117,7 +2118,9 @@
     $("#viewerConvert").addEventListener("click",()=>convertFile($("#viewerTarget").value));
     $("#viewerReset").addEventListener("click",resetViewer);
     $("#viewerCopy").addEventListener("click",copyPreview);
-    $("#viewerOriginal").addEventListener("click",()=>{if(activeFile)downloadBlob(activeFile,activeFile.name);});
+    $("#viewerOriginal").addEventListener("click",()=>{if(activeFile && activeFile.isRangeSource){window.open(activeFile.url,"_blank","noopener,noreferrer");return;}if(activeFile)downloadBlob(activeFile,activeFile.name);});
+    $("#openRemoteFits").addEventListener("click",openRemoteFits);
+    $("#remoteFitsUrl").addEventListener("keydown",(e)=>{if(e.key==="Enter"){e.preventDefault();openRemoteFits();}});
   }
   function downloadFromRegistry(format) {
     $("#viewerExtensionHint").textContent=format ? "Suggested type: "+format+" — choose a matching local file to open it." : "Choose a local file to open.";
@@ -2127,7 +2130,7 @@
   function init() {
     wireViewer();
     resetViewer();
-    window.SpaceViewer={open:downloadFromRegistry,loadFile:renderFile};
+    window.SpaceViewer={open:downloadFromRegistry,loadFile:renderFile,openRemoteFits:openRemoteFits};
   }
   if(document.readyState==="loading") document.addEventListener("DOMContentLoaded",init); else init();
 })();

@@ -16,7 +16,7 @@
   const MAX_TABLE_ROWS = 250;
   const MAX_NDJSON_ROWS = 100000;
   const libs = {};
-  let activeFile = null, currentPreview = {}, activeUrl = "", activeArchive = null, activeGzipBytes = null, activeViewerCleanup = null, activeFormatRecord = null;
+  let activeFile = null, currentPreview = {}, activeUrl = "", activeArchive = null, activeDecompressedBytes = null, activeViewerCleanup = null, activeFormatRecord = null;
   let formatRegistryPromise = null;
 
   const stage = () => $("#viewerStage");
@@ -65,7 +65,8 @@
     modelViewer: "https://ajax.googleapis.com/ajax/libs/model-viewer/4.0.0/model-viewer.min.js",
     occtJs: "https://cdn.jsdelivr.net/npm/occt-import-js@0.0.23/dist/occt-import-js.js",
     shpJs: "https://unpkg.com/shpjs@4.0.4/dist/shp.js",
-    sqlJs: "https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.13.0/sql-wasm.js"
+    sqlJs: "https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.13.0/sql-wasm.js",
+    bz2: "https://cdn.jsdelivr.net/npm/bz2@1.0.1/index.js"
   };
   const MODULES = {
     netcdf: "https://cdn.jsdelivr.net/npm/netcdfjs@4.0.0/+esm",
@@ -104,7 +105,8 @@
     [LIB.modelViewer]:"sha384-sr9b4Ux0WhAUGclJ0ym0FSY2zSOMmNSn0bP/SA0e6bNCrpn/5W3QL8mm+LdlQMKw",
     [LIB.occtJs]:"sha384-Z8pO9JEhFZF+mvDKxMuLvPT85VP7nly8CqYjBatl0bMeW9OsaKCes4gEUPL4nihc",
     [LIB.shpJs]:"sha384-SvGz+Dog2fS8fxYIE3uf8dViVamrK+czJkTku+kw1+N5jqZULpRyEpT1JqF0PaWh",
-    [LIB.sqlJs]:"sha384-DJiKBv+LC78e5InEB+MvFIAH079ynMK/ERTtFUCpDzXhH1Bht7aVfpg3yOVsuYl9"
+    [LIB.sqlJs]:"sha384-DJiKBv+LC78e5InEB+MvFIAH079ynMK/ERTtFUCpDzXhH1Bht7aVfpg3yOVsuYl9",
+    [LIB.bz2]:"sha384-PLACEHOLDER"
   };
   function clearStage() {
     if (typeof activeViewerCleanup === "function") { try { activeViewerCleanup(); } catch (_) {} activeViewerCleanup = null; }
@@ -113,7 +115,7 @@
     stage().replaceChildren();
     currentPreview = {};
     activeArchive = null;
-    activeGzipBytes = null;
+    activeDecompressedBytes = null;
   }
   function newObjectUrl(blob) {
     if (activeUrl) URL.revokeObjectURL(activeUrl);
@@ -851,8 +853,20 @@
     const bytes=new Uint8Array(await file.arrayBuffer());
     const ext=extOf(file);
     let entries;
+    if(ext===".bz2") {
+      await loadScript(LIB.bz2,()=>!!window.bz2 && typeof window.bz2.decompress==="function");
+      const output=window.bz2.decompress(bytes,true);activeDecompressedBytes=output;
+      addHeading("BZIP2 decompression viewer","Decompressed locally with the MIT-licensed SheetJS bz2 reader. Expanded data stays in browser memory until you download it.");
+      metaStrip([["COMPRESSED",formatBytes(file.size)],["EXPANDED",formatBytes(output.byteLength)],["TYPE","BZIP2 stream"]]);
+      const preview=output.subarray(0,Math.min(output.length,2*1024*1024));
+      addPre(new TextDecoder("utf-8",{fatal:false}).decode(preview),"DECOMPRESSED TEXT PREVIEW");
+      if(preview.length<output.length)addNotice("Text preview truncated; the complete decompressed payload is available for download.");
+      currentPreview={type:"bz2",bytes:output};setTargets([{value:"decompress",label:"Download decompressed payload"},{value:"report-json",label:"Export file report → JSON"},{value:"zip",label:"Wrap original in ZIP"}]);
+      const btn=document.createElement("button");btn.className="btn small";btn.textContent="Download decompressed file";btn.onclick=()=>downloadBlob(new Blob([output]),file.name.replace(/\.bz2$/i,"")||"decompressed.bin");stage().append(btn);
+      return;
+    }
     if(ext===".gz" || /\.gz$/i.test(file.name)) {
-      const output=window.fflate.gunzipSync(bytes);activeGzipBytes=output;
+      const output=window.fflate.gunzipSync(bytes);activeDecompressedBytes=output;
       addHeading("GZIP inspector","The compressed payload has been decompressed locally in memory. Use the download button to save it separately.");
       metaStrip([["COMPRESSED",formatBytes(file.size)],["EXPANDED",formatBytes(output.byteLength)],["TYPE","GZIP stream"]]);
       const preview=output.subarray(0,Math.min(output.length,2*1024*1024));
@@ -1173,7 +1187,7 @@
         kind="xml";setTargets(targetsFor(file,kind));await renderXml(file);
       } else if(ext===".tar" || ext===".tar.gz" || /\.tgz$/i.test(file.name)) {
         kind="tar";await renderTarFile(file);
-      } else if([".zip",".kmz"].includes(ext) || ext===".gz" || /\.gz$/i.test(file.name)) {
+      } else if([".zip",".kmz"].includes(ext) || ext===".gz" || ext===".bz2" || /\.gz$/i.test(file.name)) {
         kind=ext===".gz"?"gzip":"zip";await renderArchive(file);
       } else if([".mp3",".wav",".ogg",".flac",".m4a",".aac"].includes(ext) || (file.type&&file.type.startsWith("audio/"))) {
         kind="audio";addHeading("Audio player","Playback depends on the codecs supported by this browser.");
@@ -1302,8 +1316,8 @@
         const packed=window.fflate.zipSync({[cleanName]:bytes},{level:1});
         blob=new Blob([packed],{type:"application/zip"});name=file.name+".zip";
       } else if(target==="decompress") {
-        if(!activeGzipBytes) throw new Error("Decompression payload is not available. Reload the .gz file first.");
-        blob=new Blob([activeGzipBytes]);name=file.name.replace(/\.gz$/i,"")||"decompressed.bin";
+        if(!activeDecompressedBytes) throw new Error("Decompression payload is not available. Reload the compressed file first.");
+        blob=new Blob([activeDecompressedBytes]);name=file.name.replace(/\.gz$/i,"")||"decompressed.bin";
       } else if(target==="report-json") {
         const signature=await readHead(file,64);
         const report={

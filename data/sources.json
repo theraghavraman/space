@@ -1,0 +1,467 @@
+[
+  {
+    "id": "nasa",
+    "name": "NASA Earthdata / CMR",
+    "country": "United States",
+    "mark": "NASA",
+    "type": "API",
+    "status": "API live",
+    "desc": "Search Earth-observation collections and granules; selected assets may require Earthdata Login.",
+    "portal": "https://search.earthdata.nasa.gov/search",
+    "api": "https://cmr.earthdata.nasa.gov/search/granules.json",
+    "docs": "https://cmr.earthdata.nasa.gov/search/site/docs/search/api.html",
+    "formats": [
+      ".nc",
+      ".h5",
+      ".hdf",
+      ".tif",
+      ".fits",
+      ".grib",
+      ".zarr"
+    ],
+    "access": "Public catalogue metadata; many downloads are open, while restricted collections require sign-in."
+  },
+  {
+    "id": "pds",
+    "name": "NASA Planetary Data System",
+    "country": "United States",
+    "mark": "PDS",
+    "type": "Portal + tools",
+    "status": "Official portal",
+    "desc": "Search planetary mission archives and validate PDS3/PDS4 products with official tooling.",
+    "portal": "https://pds.nasa.gov/",
+    "api": "https://pds.nasa.gov/services/",
+    "docs": "https://pds.nasa.gov/tools/about/",
+    "formats": [
+      ".xml",
+      ".lbl",
+      ".img",
+      ".tab",
+      ".qub",
+      ".fits",
+      ".bsp"
+    ],
+    "access": "Archive products generally public; cite mission-specific terms and labels."
+  },
+  {
+    "id": "nssdc-us",
+    "name": "NASA Space Science Data Coordinated Archive",
+    "country": "United States",
+    "mark": "NSSDC",
+    "type": "Portal",
+    "status": "Official portal",
+    "desc": "NASA's permanent archive for space science mission data and mission records.",
+    "portal": "https://nssdc.gsfc.nasa.gov/",
+    "api": "",
+    "docs": "https://nssdc.gsfc.nasa.gov/",
+    "formats": [
+      ".fits",
+      ".cdf",
+      ".nc",
+      ".dat",
+      ".img"
+    ],
+    "access": "Product-specific availability and access instructions apply."
+  },
+  {
+    "id": "copernicus",
+    "name": "Copernicus Data Space Ecosystem",
+    "country": "European Union / ESA",
+    "mark": "ESA",
+    "type": "STAC API",
+    "status": "API live",
+    "desc": "Discover Sentinel Earth-observation collections through the public STAC catalogue; item assets may have product access constraints.",
+    "portal": "https://dataspace.copernicus.eu/",
+    "api": "https://stac.dataspace.copernicus.eu/v1/collections",
+    "docs": "https://documentation.dataspace.copernicus.eu/APIs/STAC.html",
+    "formats": [
+      ".safe",
+      ".jp2",
+      ".xml",
+      ".tif",
+      ".nc",
+      ".zarr"
+    ],
+    "access": "Catalogue discovery is public; product downloads, quotas and authentication depend on service."
+  },
+  {
+    "id": "eumetsat",
+    "name": "EUMETSAT Data Store",
+    "country": "Europe",
+    "mark": "EUM",
+    "type": "REST API + portal",
+    "status": "Portal / REST",
+    "desc": "Meteorological satellite products, collection browsing, API tooling and bulk data access.",
+    "portal": "https://data.eumetsat.int/",
+    "api": "https://api.eumetsat.int/data/browse/",
+    "docs": "https://user.eumetsat.int/resources/user-guides",
+    "formats": [
+      ".nc",
+      ".grib",
+      ".h5",
+      "HRIT",
+      "LRIT"
+    ],
+    "access": "Search/browse APIs exist; account/token requirements vary by product and download method."
+  },
+  {
+    "id": "isro",
+    "name": "ISRO / NRSC Bhoonidhi",
+    "country": "India",
+    "mark": "ISRO",
+    "type": "STAC API (account required)",
+    "status": "Login / API key",
+    "desc": "Satellite data search and download for Indian and selected international Earth-observation missions.",
+    "portal": "https://bhoonidhi.nrsc.gov.in/bhoonidhi/home.html",
+    "api": "https://bhoonidhi-api.nrsc.gov.in/data/search",
+    "docs": "https://bhoonidhi.nrsc.gov.in/bhoonidhi-api/",
+    "formats": [
+      ".tif",
+      ".jp2",
+      ".xml",
+      ".h5",
+      ".nc",
+      ".zip"
+    ],
+    "access": "API access requires registered credentials; this site intentionally does not collect or store the credentials."
+  },
+  {
+    "id": "isro-bhuvan",
+    "name": "ISRO / NRSC Bhuvan",
+    "country": "India",
+    "mark": "BHU",
+    "type": "Portal",
+    "status": "Official portal",
+    "desc": "Indian geospatial visualisation and thematic mapping services.",
+    "portal": "https://bhuvan.nrsc.gov.in/",
+    "api": "",
+    "docs": "https://www.isro.gov.in/SpaceBasedEarthObservationServices.html",
+    "formats": [
+      ".tif",
+      ".shp",
+      ".geojson",
+      ".kml",
+      ".kmz"
+    ],
+    "access": "Service-specific terms, layers and access options vary."
+  },
+  {
+    "id": "isro-mosdac",
+    "name": "ISRO MOSDAC",
+    "country": "India",
+    "mark": "MOS",
+    "type": "Portal",
+    "status": "Official portal",
+    "desc": "Meteorological and oceanographic satellite data and products.",
+    "portal": "https://mosdac.gov.in/",
+    "api": "",
+    "docs": "https://mosdac.gov.in/",
+    "formats": [
+      ".h5",
+      ".nc",
+      ".grib",
+      ".tif",
+      ".csv"
+    ],
+    "access": "Some services require user registration."
+  },
+  {
+    "id": "jaxa",
+    "name": "JAXA DARTS",
+    "country": "Japan",
+    "mark": "JAXA",
+    "type": "Portal + direct archive access",
+    "status": "Official portal",
+    "desc": "Science archives spanning astronomy, solar-terrestrial physics and planetary exploration; provides format-specific guidance.",
+    "portal": "https://darts.isas.jaxa.jp/en/",
+    "api": "",
+    "docs": "https://darts.isas.jaxa.jp/en/faq",
+    "formats": [
+      ".fits",
+      ".cdf",
+      ".nc",
+      ".bsp",
+      ".lbl",
+      ".img"
+    ],
+    "access": "Many datasets offer direct public downloads; follow individual mission instructions."
+  },
+  {
+    "id": "china-nssdc",
+    "name": "Chinese National Space Science Data Center (NSSDC)",
+    "country": "China",
+    "mark": "CN NSSDC",
+    "type": "Portal",
+    "status": "Official national data centre",
+    "desc": "Space physics, space astronomy, lunar and planetary science resources including Chang'e, Tianwen and science mission datasets.",
+    "portal": "https://www.nssdc.ac.cn/nssdc_en/html/index.html",
+    "api": "",
+    "docs": "https://www.nssdc.ac.cn/nssdc_en/html/index.html",
+    "formats": [
+      ".cdf",
+      ".fits",
+      ".xml",
+      ".img",
+      ".dat",
+      ".csv"
+    ],
+    "access": "Dataset permissions and download methods vary; some data require researcher authorization."
+  },
+  {
+    "id": "china-dataaccess",
+    "name": "China NSSDC Data Access",
+    "country": "China",
+    "mark": "CN DATA",
+    "type": "Portal",
+    "status": "Official data access",
+    "desc": "National Space Science Data Center resources, scientific archives and dataset access interfaces.",
+    "portal": "https://dataaccess.nssdc.ac.cn/",
+    "api": "",
+    "docs": "https://dataaccess.nssdc.ac.cn/",
+    "formats": [
+      ".cdf",
+      ".fits",
+      ".dat",
+      ".xml",
+      ".csv"
+    ],
+    "access": "Some research datasets are access-controlled or require PI permission."
+  },
+  {
+    "id": "cnsa",
+    "name": "China National Space Administration — Resources",
+    "country": "China",
+    "mark": "CNSA",
+    "type": "Portal directory",
+    "status": "Official portal",
+    "desc": "CNSA resource services linking lunar exploration data, national remote-sensing data and satellite query services.",
+    "portal": "https://www.cnsa.gov.cn/n6758826/index.html",
+    "api": "",
+    "docs": "https://www.cnsa.gov.cn/n6758826/index.html",
+    "formats": [
+      "Mission-specific packages",
+      "GeoTIFF",
+      "XML",
+      "Binary"
+    ],
+    "access": "The linked data services have their own access and reuse rules."
+  },
+  {
+    "id": "china-lunar",
+    "name": "Chinese Lunar Exploration Data Release System",
+    "country": "China",
+    "mark": "CLEP",
+    "type": "Portal",
+    "status": "Mission archive",
+    "desc": "Officially referenced lunar exploration data platform; consult mission product standards and labels.",
+    "portal": "https://moon.bao.ac.cn/",
+    "api": "",
+    "docs": "https://www.cnsa.gov.cn/n6758826/index.html",
+    "formats": [
+      "Mission-specific imagery",
+      "DEM/raster",
+      "XML",
+      "Binary"
+    ],
+    "access": "Verify the currently accessible endpoint, data licensing and mission product standard before bulk fetching."
+  },
+  {
+    "id": "roscosmos",
+    "name": "Roscosmos",
+    "country": "Russia",
+    "mark": "ROSCOSMOS",
+    "type": "Agency portal",
+    "status": "Portal / mission-dependent",
+    "desc": "Official Russian state space corporation portal. This registry does not assert an open, general-purpose public data API; use mission/archive links published by the agency.",
+    "portal": "https://www.roscosmos.ru/",
+    "api": "",
+    "docs": "https://www.roscosmos.ru/",
+    "formats": [
+      "Mission-specific telemetry",
+      "Binary",
+      "Raster imagery",
+      "XML/CSV where provided"
+    ],
+    "access": "Public download APIs and reuse terms are mission-dependent; do not assume unrestricted bulk access."
+  },
+  {
+    "id": "russia-earth",
+    "name": "Russian Earth-observation data access",
+    "country": "Russia",
+    "mark": "EO RU",
+    "type": "Portal directory",
+    "status": "Provider-specific",
+    "desc": "Use only the acquisition/data-distribution service named by a Russian mission or data provider. Do not treat third-party imagery portals as Roscosmos APIs.",
+    "portal": "https://www.roscosmos.ru/",
+    "api": "",
+    "docs": "https://www.roscosmos.ru/",
+    "formats": [
+      "GeoTIFF",
+      "TIFF",
+      "JPEG 2000",
+      "Metadata XML",
+      "Mission-specific binary"
+    ],
+    "access": "No universal Roscosmos browser API is advertised here; check access, license, and sanctions/export-control requirements."
+  },
+  {
+    "id": "canada-eodms",
+    "name": "Natural Resources Canada EODMS",
+    "country": "Canada",
+    "mark": "EODMS",
+    "type": "Portal + services",
+    "status": "Official data portal",
+    "desc": "Earth observation data management and discovery for Canadian and international satellite data collections.",
+    "portal": "https://eodms-sgdot.nrcan-rncan.gc.ca/",
+    "api": "",
+    "docs": "https://eodms-sgdot.nrcan-rncan.gc.ca/",
+    "formats": [
+      ".tif",
+      ".jp2",
+      ".xml",
+      ".shp",
+      ".nc"
+    ],
+    "access": "Accounts and provider-specific permissions may be required."
+  },
+  {
+    "id": "noaa-class",
+    "name": "NOAA CLASS",
+    "country": "United States",
+    "mark": "NOAA",
+    "type": "Portal",
+    "status": "Official archive",
+    "desc": "Comprehensive Large Array-data Stewardship System for NOAA environmental satellite data.",
+    "portal": "https://www.class.noaa.gov/",
+    "api": "",
+    "docs": "https://www.class.noaa.gov/",
+    "formats": [
+      ".nc",
+      ".h5",
+      ".grib",
+      "HRIT",
+      "LRIT"
+    ],
+    "access": "Dataset and account conditions vary."
+  },
+  {
+    "id": "noaa-ncei",
+    "name": "NOAA National Centers for Environmental Information",
+    "country": "United States",
+    "mark": "NCEI",
+    "type": "Portal + APIs",
+    "status": "Official archive",
+    "desc": "Environmental and satellite datasets, metadata services and APIs.",
+    "portal": "https://www.ncei.noaa.gov/",
+    "api": "",
+    "docs": "https://www.ncei.noaa.gov/support/access-data-service-api-user-documentation",
+    "formats": [
+      ".nc",
+      ".grib",
+      ".csv",
+      ".tif",
+      ".json"
+    ],
+    "access": "Public datasets subject to dataset-specific terms."
+  },
+  {
+    "id": "kari",
+    "name": "Korea Aerospace Administration / KARI ecosystem",
+    "country": "South Korea",
+    "mark": "KARI",
+    "type": "Agency / archive directory",
+    "status": "Portal directory",
+    "desc": "Official Korean space programme entry points and mission information; satellite data access depends on mission and distribution service.",
+    "portal": "https://www.kasa.go.kr/eng/",
+    "api": "",
+    "docs": "https://www.kasa.go.kr/eng/",
+    "formats": [
+      "GeoTIFF",
+      "JPEG 2000",
+      "XML",
+      "Mission-specific payload"
+    ],
+    "access": "Use the official mission or imagery distribution portal where provided."
+  },
+  {
+    "id": "uk",
+    "name": "UK space-science and Earth-observation archives",
+    "country": "United Kingdom",
+    "mark": "UK",
+    "type": "Portal directory",
+    "status": "Research archives",
+    "desc": "The UK contributes to mission science through research institutes and national Earth-observation services; no single universal UKSA file API is implied.",
+    "portal": "https://www.ukspaceagency.gov.uk/",
+    "api": "",
+    "docs": "https://www.ukspaceagency.gov.uk/",
+    "formats": [
+      ".fits",
+      ".cdf",
+      ".nc",
+      ".tif",
+      ".xml"
+    ],
+    "access": "Choose the archive responsible for a given instrument or mission."
+  },
+  {
+    "id": "esa-psa",
+    "name": "ESA Planetary Science Archive",
+    "country": "Europe",
+    "mark": "PSA",
+    "type": "Portal",
+    "status": "Official archive",
+    "desc": "ESA's repository for planetary mission science products, with PDS-based and mission-specific products.",
+    "portal": "https://archives.esac.esa.int/psa/",
+    "api": "",
+    "docs": "https://www.cosmos.esa.int/web/psa",
+    "formats": [
+      "PDS3/PDS4",
+      ".xml",
+      ".lbl",
+      ".img",
+      ".fits",
+      ".bsp"
+    ],
+    "access": "Use product-specific labels, ancillary files and archive instructions."
+  },
+  {
+    "id": "esa-archives",
+    "name": "ESA Science Archives",
+    "country": "Europe",
+    "mark": "ESAC",
+    "type": "Portal",
+    "status": "Official archive",
+    "desc": "Astronomy and science mission archive access for ESA missions.",
+    "portal": "https://www.cosmos.esa.int/web/esdc",
+    "api": "",
+    "docs": "https://www.cosmos.esa.int/",
+    "formats": [
+      ".fits",
+      ".vot",
+      ".xml",
+      ".csv",
+      ".bsp"
+    ],
+    "access": "Individual archives document account requirements and downloads."
+  },
+  {
+    "id": "international",
+    "name": "International standards & shared archives",
+    "country": "International",
+    "mark": "CCSDS",
+    "type": "Standards hub",
+    "status": "Interoperability",
+    "desc": "Cross-country space packet standards and shared data exchange models.",
+    "portal": "https://ccsds.org/",
+    "api": "",
+    "docs": "https://ccsds.org/",
+    "formats": [
+      "CCSDS TM/TC/AOS/CFDP",
+      "XFDU",
+      "PDS",
+      "FITS",
+      "SPASE"
+    ],
+    "access": "Standards documentation may have usage terms; implementation code licensing is separate."
+  }
+]

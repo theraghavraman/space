@@ -61,7 +61,10 @@
     yaml: "https://cdnjs.cloudflare.com/ajax/libs/js-yaml/4.1.0/js-yaml.min.js",
     fflate: "https://cdn.jsdelivr.net/npm/fflate@0.8.2/umd/index.js",
     geotiff: "https://cdn.jsdelivr.net/npm/geotiff@2.1.3/dist-browser/geotiff.js",
-    modelViewer: "https://ajax.googleapis.com/ajax/libs/model-viewer/4.0.0/model-viewer.min.js"
+    modelViewer: "https://ajax.googleapis.com/ajax/libs/model-viewer/4.0.0/model-viewer.min.js",
+    occtJs: "https://cdn.jsdelivr.net/npm/occt-import-js@0.0.23/dist/occt-import-js.js",
+    shpJs: "https://unpkg.com/shpjs@4.0.4/dist/shp.js",
+    sqlJs: "https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.13.0/sql-wasm.js"
   };
   const MODULES = {
     netcdf: "https://cdn.jsdelivr.net/npm/netcdfjs@4.0.0/+esm",

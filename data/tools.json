@@ -142,5 +142,77 @@
     "repository": "https://github.com/nasa",
     "license": "API is a service; repository licenses apply to each client separately.",
     "run": "GET /search/granules.json?keyword=...&page_size=10"
+  },
+  {
+    "name": "PDF.js",
+    "category": "Document viewer",
+    "summary": "Mozilla's open-source PDF rendering engine; used for local page previews and exporting the selected page to a raster image.",
+    "source": "https://github.com/mozilla/pdf.js",
+    "repository": "https://github.com/mozilla/pdf.js",
+    "license": "Apache-2.0",
+    "run": "pdfjsLib.getDocument({ data: arrayBuffer })"
+  },
+  {
+    "name": "Papa Parse",
+    "category": "Tabular data",
+    "summary": "Browser CSV/TSV parser and writer with delimiter detection, quoted-field handling and worker support; used for table previews and CSV/TSV conversion.",
+    "source": "https://github.com/mholt/PapaParse",
+    "repository": "https://github.com/mholt/PapaParse",
+    "license": "MIT",
+    "run": "Papa.parse(file, { header: true, preview: 250 })"
+  },
+  {
+    "name": "SheetJS Community Edition",
+    "category": "Spreadsheets",
+    "summary": "Browser workbook parser for XLSX/XLS/ODS and related formats. SPACE exports selected-sheet values; workbook styling, macros and formula behavior are not guaranteed to survive.",
+    "source": "https://docs.sheetjs.com",
+    "repository": "https://git.sheetjs.com/sheetjs/sheetjs",
+    "license": "Apache-2.0 for Community Edition; Pro is separately licensed",
+    "run": "XLSX.read(await file.arrayBuffer(), { type: 'array' })"
+  },
+  {
+    "name": "GeoTIFF.js",
+    "category": "Geospatial raster",
+    "summary": "JavaScript GeoTIFF reader used for local raster metadata and downsampled visualization. Preview stretch is not a scientific data export.",
+    "source": "https://github.com/geotiffjs/geotiff.js",
+    "repository": "https://github.com/geotiffjs/geotiff.js",
+    "license": "MIT",
+    "run": "GeoTIFF.fromBlob(file)"
+  },
+  {
+    "name": "FITS.js (astrojs)",
+    "category": "Astronomy",
+    "summary": "Open-source FITS reader project with image HDU, data cube and table capabilities. SPACE currently uses a conservative primary 2-D image-plane preview and header reader; full validation remains external.",
+    "source": "https://github.com/astrojs/fitsjs",
+    "repository": "https://github.com/astrojs/fitsjs",
+    "license": "MIT",
+    "run": "Use the library's documented astro.FITS API"
+  },
+  {
+    "name": "js-yaml",
+    "category": "Structured text",
+    "summary": "YAML parser and serializer used for local YAML ↔ JSON transformations; use safe parsing and do not trust arbitrary documents as executable code.",
+    "source": "https://github.com/nodeca/js-yaml",
+    "repository": "https://github.com/nodeca/js-yaml",
+    "license": "MIT",
+    "run": "jsyaml.load(text); jsyaml.dump(value)"
+  },
+  {
+    "name": "fflate",
+    "category": "Archives",
+    "summary": "Fast in-browser ZIP and GZIP utilities used for archive entry previews, selected-file extraction, decompression and ZIP packaging within the browser safety limit.",
+    "source": "https://github.com/101arrowz/fflate",
+    "repository": "https://github.com/101arrowz/fflate",
+    "license": "MIT",
+    "run": "fflate.unzipSync(bytes); fflate.gunzipSync(bytes)"
+  },
+  {
+    "name": "<model-viewer>",
+    "category": "3D assets",
+    "summary": "Web component for in-browser GLB/glTF viewing with orbit controls. Multi-file glTF assets may need referenced buffers/textures; this is not a CAD/STL renderer.",
+    "source": "https://github.com/google/model-viewer",
+    "repository": "https://github.com/google/model-viewer",
+    "license": "Apache-2.0",
+    "run": "<model-viewer src='model.glb' camera-controls>"
   }
 ]

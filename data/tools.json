@@ -295,5 +295,14 @@
     "repository": "https://github.com/apache/arrow",
     "license": "Apache-2.0",
     "run": "tableFromIPC(new Uint8Array(arrayBuffer))"
+  },
+  {
+    "name": "SheetJS bz2",
+    "category": "Compression",
+    "summary": "MIT-licensed JavaScript BZIP2 decompressor used for local .bz2 payload inspection and download. It does not rewrite scientific formats inside the decompressed stream or guarantee their validity.",
+    "source": "https://github.com/SheetJS/bz2",
+    "repository": "https://github.com/SheetJS/bz2",
+    "license": "MIT",
+    "run": "bz2.decompress(new Uint8Array(arrayBuffer), true)"
   }
 ]
